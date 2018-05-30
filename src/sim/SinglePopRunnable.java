@@ -297,7 +297,7 @@ public class SinglePopRunnable implements Runnable {
 
                 } catch (IOException ex) {
                     ex.printStackTrace(System.err);
-                    showStrStatus("Error in exporting burn-in file " + exportPopFileZip.getAbsolutePath());
+                    showStrStatus("Error in exporting pop file " + exportPopFileZip.getAbsolutePath());
 
                 }
 

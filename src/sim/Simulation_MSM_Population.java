@@ -6,14 +6,12 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -45,9 +43,15 @@ import util.runnable.ExtractFieldRunnable;
  *
  * @author Ben Hui
  *
- * @version 20180528
+ * @version 20180530
  *
- * 20150525 - Change the role and renaming of snap count 20150528 -
+ * <pre>
+ * History
+ * 20150528
+ *     - Change the role and renaming of snap count
+ * 20180530
+ *     - Add support for skip thread based on snap count
+ * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
 
@@ -71,8 +75,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
     public static final int FILE_SNAPCOUNTS = FILE_EXTINCT_AT + 1;
     public static final int FILE_EVENT_POINTER = FILE_SNAPCOUNTS + 1;
     public static final int FILE_INCIDENT_COUNT = FILE_EVENT_POINTER + 1;
-    
-    public static final String[] FILE_NAMES_CSV = {"endNumInfPerson.csv", "infStatSnapshot.csv"};      
+
+    public static final String[] FILE_NAMES_CSV = {"endNumInfPerson.csv", "infStatSnapshot.csv"};
     public static final int FILE_END_NUM_INF_PERSON_CSV = 0;
     public static final int FILE_INFECTION_STAT_CSV = FILE_END_NUM_INF_PERSON_CSV + 1;
 
@@ -202,8 +206,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
         int[][] eventPointers = null;
 
-        SinglePopRunnable[] runnable_all;
-
         if (MSMPopulation.class.getName().equals(propVal[PROP_POP_TYPE])) {
             snapshotCountClassifier = new PersonClassifier[]{
                 new CLASSIFIER_PREVAL(-1),
@@ -222,8 +224,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
         }
 
         numSimTotal = ((Number) propVal[PROP_NUM_SIM_PER_SET]).intValue();
-        
-        runnable_all = new SinglePopRunnable[numSimTotal];
 
         int rngCallCounter = 0;
         rng = new random.MersenneTwisterRandomGenerator(((Number) propVal[PROP_BASESEED]).longValue());
@@ -257,20 +257,51 @@ public class Simulation_MSM_Population implements SimulationInterface {
             }
         }
 
+        File preSnapFile = new File(baseDir, FILE_NAMES_OBJ[FILE_SNAPCOUNTS]);
+
+        int simToSkip = 0;
+        if (preSnapFile.exists()) {
+
+            ObjectInputStream inStr = new ObjectInputStream(new FileInputStream(preSnapFile));
+
+            try {
+
+                try {
+                    boolean containNull = false;
+
+                    while (!containNull) {
+                        int[][][] ent = (int[][][]) inStr.readObject();
+                        containNull = checkForNullArray(ent);
+                        if (!containNull) {
+                            simToSkip++;
+                        }
+                    }
+                } catch (EOFException | NullPointerException ex) {
+                    inStr.close();
+                }
+                System.out.println("Number of vaild snapshot in " + preSnapFile.getAbsolutePath() + " = " + simToSkip);
+            } catch (ClassNotFoundException ex) {
+                ex.printStackTrace(System.err);
+
+            }
+
+        }
         while (simSoFar < numSimTotal && !stopNextTurn) {
-
             int numThreads = Math.min(numProcess, numSimTotal - simSoFar);
-            ExecutorService executor;
-            SinglePopRunnable[] runnable;
+            if (threadCounter < simToSkip) {
+                long skipSeed = rng.nextLong();
+                showStrStatus("Simulation #" + threadCounter + " with seed " + skipSeed
+                        + " skipped as "
+                        + simToSkip + " snapshot results already present at "
+                        + preSnapFile.getAbsolutePath());
 
-            File preExportFile = new File(new File(baseDir, "export_end"), POP_FILE_PREFIX + threadCounter + ".zip");
-
-            if (preExportFile.exists()) {
-                showStrStatus("Simulation  S" + threadCounter + " skip as " + preExportFile.getAbsolutePath() + " exists.");
                 simSoFar++;
                 threadCounter++;
 
             } else {
+
+                ExecutorService executor;
+                SinglePopRunnable[] runnable = null;
 
                 if (usingImportPop) {
                     File[] importPopFileSim = Arrays.copyOfRange(impPopFiles, simSoFar, simSoFar + numThreads);
@@ -338,7 +369,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                 showStrStatus("Running S" + threadCounter + " to S" + (threadCounter + numThreads - 1) + "...");
 
-                runnable = new SinglePopRunnable[numThreads];
+                if (runnable == null || runnable.length != numThreads) {
+                    runnable = new SinglePopRunnable[numThreads];
+                }                                    
+                
                 executor = Executors.newFixedThreadPool(numThreads);
 
                 for (int r = 0; r < runnable.length; r++) {
@@ -347,8 +381,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
                             ((Number) propVal[PROP_NUM_SNAP]).intValue(), ((Number) propVal[PROP_SNAP_FREQ]).intValue());
 
                     runnable[r].setBaseDir(baseDir);
-
-                    runnable_all[runnable[r].getId()] = runnable[r];
 
                     if (propVal[PROP_POP_EXPORT_AT] != null) {
                         runnable[r].setExportBurnInPop((int[]) propVal[PROP_POP_EXPORT_AT]);
@@ -436,15 +468,31 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     progressSupport.firePropertyChange(PROGRESS_SIM_STORED, simSoFar, simSoFar + runnable.length);
                 }
                 simSoFar += runnable.length;
-                genertateOutputFiles(runnable);        
+                genertateOutputFiles(runnable);
             }
-                
-        }
 
-        
+        }
 
         finalise(simSoFar);
 
+    }
+
+    private boolean checkForNullArray(Object arr) {
+        if (arr == null) {
+            return true;
+        } else {
+
+            if (arr.getClass().isArray()) {
+                if (arr instanceof Object[]) {
+                    Object[] arrObj = (Object[]) arr;
+                    return checkForNullArray(arrObj[arrObj.length - 1]);
+                } else {
+                    return false;
+                }
+            } else {
+                return arr != null;
+            }
+        }
     }
 
     protected int[] generateStrainIntroAt(float[][] ent, int i, RandomGenerator introRNG) {
@@ -524,27 +572,15 @@ public class Simulation_MSM_Population implements SimulationInterface {
         // Generating file
         ObjectOutputStream[] objS;
 
-        objS = new ObjectOutputStream[FILE_NAMES_OBJ.length];      
-        
-        for(int i = 0; i < objS.length; i++){            
+        objS = new ObjectOutputStream[FILE_NAMES_OBJ.length];
+
+        for (int i = 0; i < objS.length; i++) {
             File f = new File(baseDir, FILE_NAMES_OBJ[i]);
-            if(f.exists()){
-                Files.copy(f.toPath(), new File(baseDir, FILE_NAMES_OBJ[i]+"_pre").toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }                        
-            //objS[i] = new ObjectOutputStream(new FileOutputStream(f));
+            if (f.exists()) {
+                Files.copy(f.toPath(), new File(baseDir, FILE_NAMES_OBJ[i] + "_pre").toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
             objS[i] = AppendableObjOutstream.generateFromFile(f);
         }
-
-        /*
-        objS[FILE_END_NUM_INF] = AppendableObjOutstream.generateFromFile(new File(baseDir, FILE_NAMES_OBJ[FILE_END_NUM_INF]));
-        objS[FILE_EXTINCT_AT] = AppendableObjOutstream.generateFromFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EXTINCT_AT]));
-        if (snapshotCountClassifier.length > 0) {
-            objS[FILE_SNAPCOUNTS] = AppendableObjOutstream.generateFromFile(new File(baseDir, FILE_NAMES_OBJ[FILE_SNAPCOUNTS]));
-        }
-
-        objS[FILE_EVENT_POINTER] = AppendableObjOutstream.generateFromFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EVENT_POINTER]));
-        objS[FILE_INCIDENT_COUNT] = AppendableObjOutstream.generateFromFile(new File(baseDir, FILE_NAMES_OBJ[FILE_INCIDENT_COUNT]));
-        */
 
         PrintWriter pri = new PrintWriter(new FileWriter(new File(baseDir, FILE_NAMES_CSV[FILE_END_NUM_INF_PERSON_CSV])));
 
@@ -558,8 +594,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     int[][][] snapcount = runnable.getSnapCounts();
                     objS[FILE_SNAPCOUNTS].writeObject(snapcount);
                     objS[FILE_SNAPCOUNTS].flush();
-                    System.out.println("S" + runnable.getId() + "'s end snap = " + Arrays.deepToString(snapcount[snapcount.length-1]));
-                    
+                    System.out.println("S" + runnable.getId() + "'s end snap = " + Arrays.deepToString(snapcount[snapcount.length - 1]));
+
                 }
                 if (objS[FILE_EVENT_POINTER] != null) {
                     objS[FILE_EVENT_POINTER].writeObject(runnable.getEventsPointer());
@@ -609,7 +645,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
             try {
                 while (true) {
                     int[][][] ent = (int[][][]) inStr.readObject();
-                    snapcountBySim.add(ent);
+
+                    if (!checkForNullArray(ent)) {
+                        snapcountBySim.add(ent);
+                    }
                 }
             } catch (EOFException ex) {
                 inStr.close();
@@ -627,15 +666,26 @@ public class Simulation_MSM_Population implements SimulationInterface {
             final int PREVAL_G = 0;
             final int PREVAL_A = 0;
             final int PREVAL_R = 0;
+                                   
+            
+            
+            
 
             for (int[][][] entry : entCollection) {
                 int importAtSnap = -1;
+                
+                if(propVal[PROP_STRAINS_INTRO_AT] != null){
+                    float[] inFirstStrain  = ((float[][]) propVal[PROP_STRAINS_INTRO_AT])[0];
+                    int snapFreq = (int) propVal[PROP_SNAP_FREQ];
+                    int importTime = (int) inFirstStrain[0];       
+                    int burnIn = propVal[PROP_BURNIN] == null?  0: (int) propVal[PROP_BURNIN];                    
+                    importAtSnap = ((importTime - burnIn) / snapFreq) -1;
+                }
+                
+
                 for (int snapCounter = 0; snapCounter < entry.length; snapCounter++) {
                     if (entry[snapCounter][PREVAL_ALL][2] + entry[snapCounter][PREVAL_ALL][3] > 0) {
-                        newStrainExinctAtSnapshot[simCounter]++;
-                        if (importAtSnap < 0) {
-                            importAtSnap = snapCounter;
-                        }
+                        newStrainExinctAtSnapshot[simCounter]++;                        
                     }
                     if (importAtSnap > 0) {
                         int timePt = -1;
