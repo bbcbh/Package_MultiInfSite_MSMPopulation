@@ -3,6 +3,7 @@ package population;
 import availability.AbstractAvailability;
 import infection.AbstractInfection;
 import infection.GonorrhoeaSiteInfection;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import org.apache.commons.math3.distribution.AbstractRealDistribution;
@@ -14,19 +15,18 @@ import static population.AbstractRegCasRelMapPopulation.*;
 import population.availability.MSMAvailablity;
 
 import population.person.RelationshipPerson_MSM;
-import population.person.SiteSpecificTransmissivity;
 import population.relationshipMap.RegCasRelationship;
-import random.MersenneTwisterFastEngine;
-
+import random.MersenneTwisterRandomGenerator;
 import relationship.RelationshipMap;
 import relationship.SingleRelationship;
 import util.PersonClassifier;
 
 import util.StaticMethods;
+import population.person.MultiSiteMultiStrainPersonInterface;
 
 /**
  * @author Ben Hui
- * @version 20180521
+ * @version 20180528
  *
  * <p>
  * History:</p>
@@ -66,6 +66,10 @@ import util.StaticMethods;
  * 20130128 - Added getIndivdualInfectionList support</p>
  * <p>
  * 20180521 - Rework to fit in new package description</p>
+ * <p>
+ * 20180522 - Add treatment efficiency by site</p>
+ * <p>
+ * 20180528 - Add multiple strain support </p>
  *
  *
  */
@@ -95,7 +99,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int MSM_INSERTIVE_RECEPTIVE_ACCUM_DIST = MSM_SYM_DURATION_OVERWRITE_PROB + 1;
     public static final int MSM_SCREENING_SETTING_GENERAL = MSM_INSERTIVE_RECEPTIVE_ACCUM_DIST + 1;
     public static final int MSM_SCREENING_SETTING_TARGETED = MSM_SCREENING_SETTING_GENERAL + 1;
-    public static final int LENGTH_FIELDS_MSM_POP = MSM_SCREENING_SETTING_TARGETED + 1;
+    public static final int MSM_TREATMENT_EFFICIENCY = MSM_SCREENING_SETTING_TARGETED + 1;
+    public static final int LENGTH_FIELDS_MSM_POP = MSM_TREATMENT_EFFICIENCY + 1;
     public static final Object[] DEFAULT_MSM_FIELDS = {
         // Min/max for anal and oral sex for reg (per week) and causal relationship (per partnership), from 
         // Crawford et al. Number of risk acts by relationship status
@@ -146,15 +151,18 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         // Format: float[]{startTime, 
         //   prob of targeted screen per day (e.g. 70% within 3 months := (1- 0.7) =  (1-p)^(3*30), or p = 0.0133)              
         //   prob of repeat screen after 3 months         
-        new float[]{Float.POSITIVE_INFINITY, 0, 0}
-    };
+        new float[]{Float.POSITIVE_INFINITY, 0, 0},
+        // Treatment efficiency by site
+        // Format: float[site]{eff_for_s1, eff_for_s2 ...}
+        new float[][]{{1, 1, 1}},};
     public static final int[] AGE_RANGE = {(int) (16 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT),
         (int) (80 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT)
     };
     public static final int MAPPING_REG = 0;
     public static final int MAPPING_CAS = 1;
+    
     // Pop Snap Count (Acumulative)    
-    private final int[] popSnapCount = new int[3]; // 3 Sites, in accordance to Relationship_MSM.Site_X
+    private transient final int[] cumulativeIncidencesBySites = new int[3]; // 3 Sites, in accordance to Relationship_MSM.Site_X
     // Screening (General)
     private transient int[] screeningPersonByIndex = null; // Length of total screened
     private transient int[] screeningSite = null; // Length of total screened
@@ -187,7 +195,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
     public MSMPopulation(long seed) {
         setSeed(seed);
-        setRNG(new random.MersenneTwisterFastEngine(seed));
+        setRNG(new random.MersenneTwisterRandomGenerator(seed));
 
         Object[] newFields = Arrays.copyOf(fields, LENGTH_FIELDS_MSM_POP);
         for (int i = MSM_POP_INDEX_OFFSET; i < newFields.length; i++) {
@@ -202,14 +210,22 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         super.setFields(newFields);
 
     }
+    
+    public static MSMPopulation importMSMPopulation(java.io.ObjectInputStream objStr) 
+            throws IOException, ClassNotFoundException{
+        Object[] importFields = (Object[]) objStr.readObject();
+        Long seed = (Long) importFields[MSMPopulation.FIELDS_SEED];                                
+        MSMPopulation newPop = new MSMPopulation(seed);        
+        newPop.setFields(importFields);
+        return newPop;
+    }
 
     public void setTargetedScreenClassifier(PersonClassifier targetedScreenClassifier) {
         this.targetedScreenClassifier = targetedScreenClassifier;
     }
 
-    @Override
-    public int[] generatedPopSnapCount() {
-        return Arrays.copyOf(popSnapCount, popSnapCount.length);
+    public int[] cumulativeIncidencesBySitesCount() {
+        return Arrays.copyOf(cumulativeIncidencesBySites, cumulativeIncidencesBySites.length);
     }
 
     @Override
@@ -494,10 +510,31 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
     protected void treatPerson(RelationshipPerson_MSM msm) {
         for (int site = 0; site < msm.getInfectionStatus().length; site++) {
-            msm.getInfectionStatus()[site] = AbstractIndividualInterface.INFECT_S;
-            msm.setTimeUntilNextStage(site, Double.POSITIVE_INFINITY);
-            msm.getCurrentStrainsAtSite()[site] = SiteSpecificTransmissivity.STRAIN_NONE;
-            Arrays.fill(msm.getCurrentStrainLastUntilOfAgeAtSite()[site], Double.NaN);
+            if (msm.getInfectionStatus()[site] != AbstractIndividualInterface.INFECT_S) {
+                float[] effByStrain = ((float[][]) getFields()[MSM_TREATMENT_EFFICIENCY])[site];
+
+                for (int strain = 0; strain < effByStrain.length; strain++) {
+                    int strainAtSite = msm.getCurrentStrainsAtSite()[site];
+
+                    if ((strainAtSite & 1 << strain) != 0) {
+                        float eff = effByStrain[strain];
+
+                        if (eff < 1) {
+                            eff = getRNG().nextFloat() < eff ? 1 : 0;
+                        }
+                        if (eff >= 1) {
+                            msm.getCurrentStrainsAtSite()[site] -= (1 << strain);
+                        }
+                    }
+                }
+
+            }
+
+            if (msm.getCurrentStrainsAtSite()[site] == MultiSiteMultiStrainPersonInterface.STRAIN_NONE) {
+                msm.getInfectionStatus()[site] = AbstractIndividualInterface.INFECT_S;
+                msm.setTimeUntilNextStage(site, Double.POSITIVE_INFINITY);
+            }
+
         }
     }
 
@@ -628,12 +665,14 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         boolean[][] res = new boolean[hasActed.length][3]; // hasUnprotectedSex[actType]{occured, from_genital_person_1, from_genital_person_2}
 
         int[][] infectStat = new int[rel.getLinks().length][];
+        int[][] strainStat = new int[rel.getLinks().length][];
 
         RelationshipPerson_MSM[] person = new RelationshipPerson_MSM[rel.getLinks().length];
 
         for (int p = 0; p < rel.getLinks().length; p++) {
             person[p] = (RelationshipPerson_MSM) getLocalData().get(rel.getLinks()[p].intValue());
             infectStat[p] = person[p].getInfectionStatus();
+            strainStat[p] = person[p].getCurrentStrainsAtSite();
 
         }
 
@@ -660,8 +699,13 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                         boolean tranA2R = a2r > 0;
                         boolean tranR2A = r2a > 0;
 
+                        boolean susR = strainStat[s][RelationshipPerson_MSM.SITE_R] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A];
+                        //infectStat[s][RelationshipPerson_MSM.SITE_R] == AbstractIndividualInterface.INFECT_S;
+                        boolean susA = strainStat[s][RelationshipPerson_MSM.SITE_A] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R];
+                        //infectStat[s][RelationshipPerson_MSM.SITE_A] == AbstractIndividualInterface.INFECT_S;    
+
                         // Anal to oral   
-                        if (tranA2R && infectStat[s][RelationshipPerson_MSM.SITE_R] == AbstractIndividualInterface.INFECT_S
+                        if (tranA2R && susR
                                 && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_ASY
                                 || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_SYM)) {
 
@@ -674,17 +718,17 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                             }
 
                             if (tranA2R && !person[s].getLastActInfectious()[RelationshipPerson_MSM.SITE_R]) {
-                                popSnapCount[RelationshipPerson_MSM.SITE_R]++;
+                                cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_R]++;
                                 person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_R, true);
 
-                                if (person[s] instanceof SiteSpecificTransmissivity) {
-                                    ((SiteSpecificTransmissivity) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_R] = ((SiteSpecificTransmissivity) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_A];
+                                if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                    ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_R] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_A];
                                 }
                             }
                         }
 
                         // Oral to anal                
-                        if (tranR2A && infectStat[s][RelationshipPerson_MSM.SITE_A] == AbstractIndividualInterface.INFECT_S
+                        if (tranR2A && susA
                                 && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_ASY
                                 || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_SYM)) {
 
@@ -697,11 +741,12 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                             }
 
                             if (tranR2A && !person[s].getLastActInfectious()[RelationshipPerson_MSM.SITE_A]) {
-                                popSnapCount[RelationshipPerson_MSM.SITE_A]++;
+                                                                
+                                cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_A]++;
                                 person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_A, true);
 
-                                if (person[s] instanceof SiteSpecificTransmissivity) {
-                                    ((SiteSpecificTransmissivity) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_A] = ((SiteSpecificTransmissivity) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_R];
+                                if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                    ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_A] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_R];
                                 }
                             }
 
@@ -747,8 +792,12 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
                             double tranSucProb;
 
-                            if (infectStat[s][nonGTarget] == AbstractIndividualInterface.INFECT_S
-                                    && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G] == GonorrhoeaSiteInfection.STATUS_ASY
+                            boolean susNonG = strainStat[s][nonGTarget] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G];
+                            //infectStat[s][nonGTarget] == AbstractIndividualInterface.INFECT_S;
+                            boolean susG = strainStat[s][RelationshipPerson_MSM.SITE_G] != strainStat[(s + 1) % 2][nonGTarget];
+                            //infectStat[s][RelationshipPerson_MSM.SITE_G] == AbstractIndividualInterface.INFECT_S;
+
+                            if (susNonG && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G] == GonorrhoeaSiteInfection.STATUS_ASY
                                     || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G] == GonorrhoeaSiteInfection.STATUS_SYM)) {
 
                                 res[a][(s + 1) % 2] = true;
@@ -775,18 +824,16 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                                 }
 
                                 if (g2NG) {
-                                    popSnapCount[nonGTarget]++;
+                                    cumulativeIncidencesBySites[nonGTarget]++;
                                     person[s].setLastActInfectious(nonGTarget, true);
-
-                                    if (person[s] instanceof SiteSpecificTransmissivity) {
-                                        ((SiteSpecificTransmissivity) person[s]).getLastActStainsAtSite()[nonGTarget] = ((SiteSpecificTransmissivity) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_G];
+                                    if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                        ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[nonGTarget] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_G];
                                     }
 
                                 }
 
                             }
-                            if (infectStat[s][RelationshipPerson_MSM.SITE_G] == AbstractIndividualInterface.INFECT_S
-                                    && (infectStat[(s + 1) % 2][nonGTarget] == GonorrhoeaSiteInfection.STATUS_ASY
+                            if (susG && (infectStat[(s + 1) % 2][nonGTarget] == GonorrhoeaSiteInfection.STATUS_ASY
                                     || infectStat[(s + 1) % 2][nonGTarget] == GonorrhoeaSiteInfection.STATUS_SYM)) {
 
                                 // From nonG to G
@@ -812,10 +859,11 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                                             < tranSucProb;
                                 }
                                 if (nG2G) {
-                                    popSnapCount[RelationshipPerson_MSM.SITE_G]++;
+
+                                    cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_G]++;
                                     person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_G, true);
-                                    if (person[s] instanceof SiteSpecificTransmissivity) {
-                                        ((SiteSpecificTransmissivity) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_G] = ((SiteSpecificTransmissivity) person[(s + 1) % 2]).getCurrentStrainsAtSite()[nonGTarget];
+                                    if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                        ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_G] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[nonGTarget];
                                     }
                                 }
 
@@ -839,8 +887,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         if (mapType == MAPPING_REG) {
             double regPartLength = ((Number) getFields()[MSM_REG_LENTH_AVE]).doubleValue();
             AbstractRealDistribution regLength;
-            regLength = new ExponentialDistribution(getRNG(),1 / regPartLength);
-            dur = (int) Math.round(regLength.sample());
+            regLength = new ExponentialDistribution(getRNG(), regPartLength);
+            dur = (int) Math.max(Math.round(regLength.sample()), 1);
             actFreq = (float[][]) getFields()[MSM_POP_REG_ACT_FREQ];
 
         } else {
@@ -936,7 +984,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         random.RandomGenerator infRNG;
         if (seed != 0) {
             getFields()[FIELDS_INF_RNG] = new random.RandomGenerator[infList.length];
-            infRNG = new MersenneTwisterFastEngine(seed);
+            infRNG = new MersenneTwisterRandomGenerator(seed);
         } else {
             infRNG = null;
         }
@@ -945,7 +993,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
             AbstractRealDistribution[] distributions = new AbstractRealDistribution[GonorrhoeaSiteInfection.DIST_TOTAL];
 
             if (infRNG == null) {
-                infRNG = ((random.RandomEngine[]) getFields()[FIELDS_INF_RNG])[i]; // Imported
+                infRNG = ((random.RandomGenerator[]) getFields()[FIELDS_INF_RNG])[i]; // Imported
             }
 
             ((random.RandomGenerator[]) getFields()[FIELDS_INF_RNG])[i] = infRNG;
@@ -960,7 +1008,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                     // Kit email 20130911 for urethal
                     siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new double[]{2.5714, 2.24343};
                     var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX]);
-                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new GammaDistribution(infRNG,var[0], 1/var[1]);
+                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new GammaDistribution(infRNG, var[0], 1 / var[1]);
                     // Transmission from G - 0.5 Chen 2010
                     siteParam[GonorrhoeaSiteInfection.DIST_TRANS_PROB_INDEX] = new double[]{0.5, 0};
                     break;
@@ -970,13 +1018,13 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                     // Assume same as Urethal
                     siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new double[]{2.5714, 2.24343};
                     var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX]);
-                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] =  new GammaDistribution(infRNG,var[0], 1/var[1]);
+                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new GammaDistribution(infRNG, var[0], 1 / var[1]);
                     // Assume duration same as Garnett 1999, Brunham 1991, SD same as Johnson 2010
                     // siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new double[]{185, 5 * 7};
                     // From C. Fairley email at 20131120
                     siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new double[]{12 * 30, 5 * 7};
                     var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX]);
-                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] =  new GammaDistribution(infRNG,var[0],1/var[1]);
+                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new GammaDistribution(infRNG, var[0], 1 / var[1]);
                     // Transmission from A - assumption
                     siteParam[GonorrhoeaSiteInfection.DIST_TRANS_PROB_INDEX] = new double[]{0.08, 0};
                     break;
@@ -988,7 +1036,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                     // From C. Fairley email at 20131121, Fairley et al 2011
                     siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new double[]{12 * 7, 3 * 7};
                     var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX]);
-                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] =  new GammaDistribution(infRNG,var[0], 1/var[1]);
+                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new GammaDistribution(infRNG, var[0], 1 / var[1]);
                     // Transmission from R - assumption
                     siteParam[GonorrhoeaSiteInfection.DIST_TRANS_PROB_INDEX] = new double[]{0.4, 0};
                     break;

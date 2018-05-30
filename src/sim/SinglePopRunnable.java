@@ -1,29 +1,43 @@
 package sim;
 
+import infection.AbstractInfection;
 import infection.GonorrhoeaSiteInfection;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import population.AbstractRegCasRelMapPopulation;
 import population.MSMPopulation;
 import person.AbstractIndividualInterface;
+import relationship.RelationshipMap;
 
 import util.FileZipper;
 import util.PersonClassifier;
 import util.StaticMethods;
+import infection.MultiStrainInfectionInterface;
+import population.person.MultiSiteMultiStrainPersonInterface;
 
 /**
  *
  * @author Ben Hui
- * @version 20150407
+ * @version 20180528
  *
- * History:
+ * History:  <pre>
+ * 20150313
+ *  - Add infection history support
+ * 20150523
+ *  - Add additional setInfectionIntroAt function for import infection from prop file
+ * 20180528
+ *  - Simplfy strain intro add method.
  *
- * 20150313 - Add infection history support
+ * </pre>
+ *
  */
 public class SinglePopRunnable implements Runnable {
 
@@ -39,7 +53,7 @@ public class SinglePopRunnable implements Runnable {
     private final transient int[][][] snapCounts;                     // snapCount[snapNum][classNum][numByclassTypeId]
     private final transient boolean[][] cummulativeSnap;              // cummulativeSnap[snapNum][classNum]
     private transient int[] extinctionAt;                             // -1 = not extinct
-    private final transient int[][] popSnapCounts;                    // popSnapCounts[snapNum][countType]
+    private final transient int[][] incidenceCounts;                    // incidenceCounts[snapNum][countType]
 
     private File importFile = null;
     private String[] importSetting = null;
@@ -47,8 +61,28 @@ public class SinglePopRunnable implements Runnable {
 
     private String infectioHistoryPrefix = null;  // If not null, then export infection history
 
+    private final HashMap<Integer, float[]> infectionIntroMap = new HashMap();  // Global time, prevalence
+    private final HashMap<Integer, Integer> infectionPreExposeMap = new HashMap(); // infection_id, days
+
+    public static final String EXPORT_PREFIX = "export_";
+    private int[] exportAt = null;
+    private int exportAtPt = 0;
+    private boolean printPrevalence = false;
+
+    ArrayList<float[]> strainIntroEnt = new ArrayList<>();
+    int strainIntroPt = 0;
+    float[][] coexistMat;
+
+    public void setCoexistMat(float[][] coexistMat) {
+        this.coexistMat = coexistMat;
+    }
+
     public void setBaseDir(File baseDir) {
         this.baseDir = baseDir;
+    }
+
+    public void setPrintPrevalence(boolean printPrevalence) {
+        this.printPrevalence = printPrevalence;
     }
 
     public void setInfectioHistoryPrefix(String infectioHistoryPrefix) {
@@ -64,8 +98,16 @@ public class SinglePopRunnable implements Runnable {
         return pop.getEventsPointer();
     }
 
+    public void setExportBurnInPop(int[] exportAt) {
+        this.exportAt = exportAt;
+    }
+
     public void setEventsPointer(int[] eventsPointer) {
         pop.setEventsPointer(eventsPointer);
+    }
+
+    public void addStrainIntroEnt(float[] ent) {
+        strainIntroEnt.add(ent);
     }
 
     // <editor-fold defaultstate="collapsed" desc="InstantInfectionEvent and subclasses">    
@@ -170,7 +212,7 @@ public class SinglePopRunnable implements Runnable {
         this.snapClassifiers = new PersonClassifier[numSnaps][];
         this.cummulativeSnap = new boolean[numSnaps][];
         this.infectionEvents = new InstantInfectionEvent[numSnaps];
-        this.popSnapCounts = new int[numSnaps][];
+        this.incidenceCounts = new int[numSnaps][];
     }
 
     public void setProgressSupport(PropertyChangeSupport progressSupport) {
@@ -197,8 +239,8 @@ public class SinglePopRunnable implements Runnable {
         return snapCounts;
     }
 
-    public int[][] getPopSnapCounts() {
-        return popSnapCounts;
+    public int[][] getIncidentCounts() {
+        return incidenceCounts;
     }
 
     public int getModelBurnIn() {
@@ -211,11 +253,58 @@ public class SinglePopRunnable implements Runnable {
 
     private void modelBurnIn() {
         if (modelBurnIn > 0) {
+
             showStrStatus("S" + getId() + ": Model burn-in for " + modelBurnIn + " steps");
             for (int t = 0; t < modelBurnIn; t++) {
                 getPopulation().advanceTimeStep(1);
             }
             showStrStatus("S" + getId() + ": Model burn-in complete.");
+            exportPopAt();
+
+        }
+    }
+
+    // Export popualtion if needed
+    public void exportPopAt() {
+        exportPopAt(false);
+    }
+
+    public void exportPopAt(boolean forced) {
+       
+
+        if (forced ||(exportAt != null && exportAtPt < exportAt.length)) {
+
+            if (!forced) {
+                while (exportAt[exportAtPt] < getPopulation().getGlobalTime()) {
+                    exportAtPt++;
+                }
+            }
+
+            if (forced || exportAt[exportAtPt] == getPopulation().getGlobalTime()) {
+
+                File exportPopFileDir = new File(baseDir, EXPORT_PREFIX + Integer.toString(getPopulation().getGlobalTime()));
+                File exportPopFileZip = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId() + ".zip");
+
+                try {
+                    exportPopFileDir.mkdirs();
+                    File exportPopFileRaw = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId());
+
+                    try (ObjectOutputStream outStr = new ObjectOutputStream(new FileOutputStream(exportPopFileRaw))) {
+                        getPopulation().exportPop(outStr);
+                    }
+                    util.FileZipper.zipFile(exportPopFileRaw, exportPopFileZip);
+                    exportPopFileRaw.delete();
+
+                } catch (IOException ex) {
+                    ex.printStackTrace(System.err);
+                    showStrStatus("Error in exporting burn-in file " + exportPopFileZip.getAbsolutePath());
+
+                }
+
+                if (!forced) {
+                    exportAtPt++;
+                }
+            }
         }
     }
 
@@ -264,6 +353,19 @@ public class SinglePopRunnable implements Runnable {
         }
         infectionEvents[snapNum].setEvent(infId, infClassifer, preval,
                 new Object[]{preExposeMax, strainDecomposition});
+    }
+
+    public void setInfectionIntroAt(int globalTime, int infId, float preval, int preExposeMax) {
+        float[] preval_ent = infectionIntroMap.get(globalTime);
+        if (preval_ent == null) {
+            preval_ent = new float[infId + 1];
+            infectionIntroMap.put(globalTime, preval_ent);
+        } else if (preval_ent.length <= infId) {
+            preval_ent = Arrays.copyOf(preval_ent, infId + 1);
+            infectionIntroMap.put(globalTime, preval_ent);
+        }
+        preval_ent[infId] = preval;
+        infectionPreExposeMap.put(infId, preExposeMax);
     }
 
     public void setStrainIntroAt(int snapNum, int infId,
@@ -328,7 +430,15 @@ public class SinglePopRunnable implements Runnable {
 
                     setModelBurnIn(0); // No burn in                       
                     getPopulation().initialiseInfection(0); // 0 = using orginal RNG
-                    
+
+                }
+            }
+            // Set coexist matrix            
+
+            if (coexistMat != null) {
+                AbstractInfection[] infList = getPopulation().getInfList();
+                for (AbstractInfection inf : infList) {
+                    ((MultiStrainInfectionInterface) inf).setStrainCoexistMatrix(coexistMat);
                 }
             }
 
@@ -338,7 +448,6 @@ public class SinglePopRunnable implements Runnable {
             modelBurnIn();
             reportStepStatus(modelBurnIn);
             t = modelBurnIn;
-
             showStrStatus("S" + getId() + ": Simulation in progress");
 
             HashMap<String, int[]> currentInfectedAt = new HashMap();
@@ -391,6 +500,83 @@ public class SinglePopRunnable implements Runnable {
                 getPopulation().setSnapshotCount(snapCounts[s]);
 
                 for (int f = 0; f < snapFreq; f++) {
+                    // Check for intro infection
+                    if (infectionIntroMap.containsKey(getPopulation().getGlobalTime())) {
+                        float[] prevalCount = infectionIntroMap.get(getPopulation().getGlobalTime());
+
+                        // Count how many in relationship
+                        int pI = 0;
+                        int numInRel = 0;
+                        AbstractIndividualInterface p;
+
+                        while (pI < getPopulation().getPop().length) {
+                            if (inRelationship(getPopulation().getPop()[pI])) {
+                                numInRel++;
+                            }
+                            pI++;
+                        }
+
+                        for (int infId = 0; infId < prevalCount.length; infId++) {
+                            if (prevalCount[infId] > 0) {
+                                if (prevalCount[infId] < 1) {
+                                    prevalCount[infId] = Math.round(prevalCount[infId] * numInRel);
+                                }
+                            }
+                        }
+
+                        pI = 0;
+
+                        while (pI < getPopulation().getPop().length) {
+                            p = getPopulation().getPop()[pI];
+
+                            if (inRelationship(p)) {
+                                for (int infId = 0; infId < prevalCount.length; infId++) {
+                                    int preExpose = infectionPreExposeMap.get(infId) == null ? 0 : infectionPreExposeMap.get(infId).intValue();
+
+                                    if (prevalCount[infId] > 0) {
+                                        if (getPopulation().getInfList()[infId].isInfected(p)) {
+                                            prevalCount[infId]--;
+                                        } else {
+                                            int numAvail = numInRel;
+                                            if (getPopulation().getInfList()[infId].getRNG().nextInt(numAvail) < prevalCount[infId]) {
+                                                getPopulation().getInfList()[infId].infecting(p);
+
+                                                if (preExpose > 0) {
+                                                    preExpose = getPopulation().getInfList()[infId].getRNG().nextInt(preExpose);
+                                                }
+
+                                                double infectAt = p.getAge() - preExpose;
+                                                p.setLastInfectedAtAge(getPopulation().getInfList()[infId].getInfectionIndex(), infectAt);
+                                                // Determine status immediately
+                                                int stateStart = -preExpose;
+                                                double cumulStageTime = p.getTimeUntilNextStage(getPopulation().getInfList()[infId].getInfectionIndex());
+                                                p.setTimeUntilNextStage(getPopulation().getInfList()[infId].getInfectionIndex(), cumulStageTime + stateStart);
+
+                                                while ((p.getTimeUntilNextStage(getPopulation().getInfList()[infId].getInfectionIndex())) < 0) {
+                                                    cumulStageTime += Math.round(getPopulation().getInfList()[infId].advancesState(p));
+                                                    p.setTimeUntilNextStage(getPopulation().getInfList()[infId].getInfectionIndex(), cumulStageTime + stateStart);
+                                                }
+
+                                                if (p.getInfectionStatus()[infId] != AbstractIndividualInterface.INFECT_S) {
+                                                    if (getPopulation().getInfList()[infId] instanceof MultiStrainInfectionInterface
+                                                            && p instanceof MultiSiteMultiStrainPersonInterface) {
+                                                        ((MultiSiteMultiStrainPersonInterface) p).setCurrentStrainAtSite(infId, 1); // default - set all strain as 1
+
+                                                    }
+                                                    prevalCount[infId]--;
+                                                }
+
+                                            }
+                                        }
+
+                                    }
+                                }
+                                numInRel--;
+                            }
+                            pI++;
+                        }
+                    }
+
                     if (snapClassifiers[s] != null && f == snapFreq - 1) {
                         // Set up instant count if needed
                         for (int c = 0; c < snapClassifiers[s].length; c++) {
@@ -401,7 +587,54 @@ public class SinglePopRunnable implements Runnable {
                         getPopulation().setSnapshotCount(snapCounts[s]);
                     }
 
+                    introStrain();
                     getPopulation().advanceTimeStep(1);
+                    // Check if need to export pop
+                    exportPopAt();
+
+                    if (printPrevalence) {
+                        StringBuilder output = new StringBuilder();
+                        output.append(this.getId());
+                        output.append(',');
+                        output.append(getPopulation().getGlobalTime());
+                        output.append(',');
+                        output.append(getPopulation().getNumInf()[0]);
+                        output.append(',');
+                        output.append(getPopulation().getNumInf()[1]);
+                        output.append(',');
+                        output.append(getPopulation().getNumInf()[2]);
+
+                        for (int siteId = 0; siteId < getPopulation().getInfList().length; siteId++) {
+                            if (getPopulation().getInfList()[siteId] instanceof MultiStrainInfectionInterface) {
+                                int numStrains
+                                        = ((MultiStrainInfectionInterface) (getPopulation().getInfList()[siteId])).getStrainCoexistMatrix().length;
+
+                                int[] strainCounter = new int[numStrains];
+
+                                for (AbstractIndividualInterface p : getPopulation().getPop()) {
+                                    if (p instanceof MultiSiteMultiStrainPersonInterface) {
+                                        if (p.getInfectionStatus()[siteId] != AbstractIndividualInterface.INFECT_S) {
+                                            int currentS = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite()[siteId];
+                                            for (int strain = 0; strain < strainCounter.length; strain++) {
+                                                if ((currentS & (1 << strain)) != 0) {
+                                                    strainCounter[strain]++;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                for (int strain = 0; strain < strainCounter.length; strain++) {
+                                    output.append(',');
+                                    output.append(strainCounter[strain]);
+                                }
+
+                            }
+
+                        }
+
+                        System.out.println(output.toString());
+                    }
                     t++;
 
                     if (infectioHistoryPrefix != null) {
@@ -444,7 +677,7 @@ public class SinglePopRunnable implements Runnable {
 
                                     } else if (infStat == AbstractIndividualInterface.INFECT_S) {
                                         // Person just recovered
-                                        int[] entry = currentInfectedAt.get(keyStr);                                        
+                                        int[] entry = currentInfectedAt.get(keyStr);
                                         File infectionRecordFile = new File(baseDir,
                                                 infectioHistoryPrefix + Integer.toString(this.getId())
                                                 + ".obj");
@@ -456,15 +689,15 @@ public class SinglePopRunnable implements Runnable {
                                             java.io.FileOutputStream fileOutStream = new java.io.FileOutputStream(infectionRecordFile,
                                                     fileExisted);
                                             java.io.BufferedOutputStream bufferedOutStream = new java.io.BufferedOutputStream(fileOutStream);
-                                            
+
                                             java.io.DataOutputStream dataOutStream = new java.io.DataOutputStream(bufferedOutStream);
-                                            
+
                                             dataOutStream.writeInt(getPopulation().getGlobalTime());
                                             dataOutStream.writeInt(person.getId());
-                                            dataOutStream.writeInt(siteId); 
+                                            dataOutStream.writeInt(siteId);
                                             dataOutStream.writeInt(entry[1]); // Inf Stat 
                                             dataOutStream.writeInt(entry[0]); // Start time, with duration = Global time - Start time                                         
-                                            
+
                                             dataOutStream.close();
                                             bufferedOutStream.close();
                                             fileOutStream.close();
@@ -530,18 +763,26 @@ public class SinglePopRunnable implements Runnable {
                 }
 
                 reportStepStatus(t);
-                popSnapCounts[s] = getPopulation().generatedPopSnapCount();
+
+                if (getPopulation() instanceof MSMPopulation) {
+                    incidenceCounts[s] = ((MSMPopulation) getPopulation()).cumulativeIncidencesBySitesCount();
+                }
+
+                //int[][] singleSnapCounts = getSnapCounts()[s];
+                //System.out.println("S" + getId() + " #" + s + ":" + Arrays.deepToString(singleSnapCounts));
             }
 
             showStrStatus("S" + getId() + ": Simulation complete."
                     + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()));
 
+            exportPopAt(true);
+
             if (pop instanceof MSMPopulation) {
                 MSMPopulation mPop = (MSMPopulation) pop;
                 showStrStatus("S" + getId() + ": Aver rel dur = "
                         + Arrays.toString(new float[]{
-                            1f * mPop.relLen[0] / mPop.relTotal[0],
-                            1f * mPop.relLen[1] / mPop.relTotal[1],})
+                    1f * mPop.relLen[0] / mPop.relTotal[0],
+                    1f * mPop.relLen[1] / mPop.relTotal[1],})
                 );
             }
 
@@ -561,6 +802,73 @@ public class SinglePopRunnable implements Runnable {
             }
         }
 
+    }
+
+    public void introStrain() {
+        // Check strain intro
+        // ent format:
+        // {0: globaltime, 1: strainNum,
+        //  2: site, 3: number of infection to introduce, 4:frequency (optional) }
+
+        if (strainIntroPt < strainIntroEnt.size()) {
+            float[] ent = strainIntroEnt.get(strainIntroPt);
+
+            if (ent[0] == getPopulation().getGlobalTime() + 1) { // Intro in next step
+                int strainId = (int) ent[1];
+                int site = (int) ent[2];
+                int numInfect = (int) ent[3];
+
+                ArrayList<AbstractIndividualInterface> candidate = new ArrayList<>();
+
+                for (AbstractIndividualInterface p : getPopulation().getPop()) {
+                    if (p.getInfectionStatus()[site] != AbstractIndividualInterface.INFECT_S 
+                            && p.getTimeUntilNextStage(site) > 1) {                                                
+                        if (p instanceof MultiSiteMultiStrainPersonInterface) {
+                            int strain = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite()[site];                            
+                            if ((strain & (1 << strainId)) == 0) {
+                                candidate.add(p);
+                            }
+                        }
+                    }
+                }
+
+                int numNewInfected = Math.min(numInfect, candidate.size());
+                AbstractIndividualInterface[] canArr = candidate.toArray(new AbstractIndividualInterface[candidate.size()]);
+               
+
+                for (int i = 0; i < canArr.length && numNewInfected > 0; i++) {
+                    if (getPopulation().getInfList()[site].getRNG().nextInt(canArr.length - i) < numNewInfected) {
+                        //int orgStrain = ((MultiSiteMultiStrainPersonInterface) canArr[i]).getCurrentStrainsAtSite()[site];
+                        ((MultiSiteMultiStrainPersonInterface) canArr[i]).setCurrentStrainAtSite(site, 1 << strainId);
+                        numNewInfected--;                        
+                        
+                        System.out.println("S" + getId() + ": switching #" + canArr[i].getId() + "'s infection at site " + site 
+                                + " to strain 0b" + Integer.toBinaryString(1 << strainId) + " at " + getPopulation().getGlobalTime());
+                    }
+                }
+
+                if (ent.length >= 5) {
+                    ent = Arrays.copyOf(ent, ent.length);
+                    ent[0] += ent[4];
+                    strainIntroEnt.add(ent);
+                }
+                strainIntroPt++;
+                introStrain(); // Recursive call if necessary
+            }
+
+        }
+
+    }
+
+    public boolean inRelationship(AbstractIndividualInterface p) {
+        boolean inRel = false;
+        RelationshipMap[] relMap = getPopulation().getRelMap();
+        for (int m = 0; m < relMap.length; m++) {
+            if (relMap[m].containsVertex(p.getId())) {
+                inRel |= relMap[m].degreeOf(p.getId()) > 0;
+            }
+        }
+        return inRel;
     }
 
     long tstamp = 0;
