@@ -529,7 +529,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
         for(int i = 0; i < objS.length; i++){            
             File f = new File(baseDir, FILE_NAMES_OBJ[i]);
             if(f.exists()){
-                Files.move(f.toPath(), new File(baseDir, FILE_NAMES_OBJ[i]+"_pre").toPath(), StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(f.toPath(), new File(baseDir, FILE_NAMES_OBJ[i]+"_pre").toPath(), StandardCopyOption.REPLACE_EXISTING);
             }                        
             //objS[i] = new ObjectOutputStream(new FileOutputStream(f));
             objS[i] = AppendableObjOutstream.generateFromFile(f);
