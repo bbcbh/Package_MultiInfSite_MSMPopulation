@@ -43,7 +43,7 @@ import util.runnable.ExtractFieldRunnable;
  *
  * @author Ben Hui
  *
- * @version 20180530
+ * @version 20180531
  *
  * <pre>
  * History
@@ -51,6 +51,8 @@ import util.runnable.ExtractFieldRunnable;
  *     - Change the role and renaming of snap count
  * 20180530
  *     - Add support for skip thread based on snap count
+ * 20180531
+ *     - Adjustment snapshot count sampling frequency
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
@@ -674,9 +676,12 @@ public class Simulation_MSM_Population implements SimulationInterface {
             for (int[][][] entry : entCollection) {
                 int importAtSnap = -1;
                 
+                int snapFreq = (int) propVal[PROP_SNAP_FREQ];
+                final int snapPerYr = 360/snapFreq;
+                
+                
                 if(propVal[PROP_STRAINS_INTRO_AT] != null){
-                    float[] inFirstStrain  = ((float[][]) propVal[PROP_STRAINS_INTRO_AT])[0];
-                    int snapFreq = (int) propVal[PROP_SNAP_FREQ];
+                    float[] inFirstStrain  = ((float[][]) propVal[PROP_STRAINS_INTRO_AT])[0];                    
                     int importTime = (int) inFirstStrain[0];       
                     int burnIn = propVal[PROP_BURNIN] == null?  0: (int) propVal[PROP_BURNIN];                    
                     importAtSnap = ((importTime - burnIn) / snapFreq) -1;
@@ -689,22 +694,16 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     }
                     if (importAtSnap > 0) {
                         int timePt = -1;
-                        switch (snapCounter - importAtSnap) {
-                            case 2 * 1:
-                                timePt = 0;
-                                break;
-                            case 2 * 2:
-                                timePt = 1;
-                                break;
-                            case 2 * 5:
-                                timePt = 2;
-                                break;
-                            case 2 * 10:
-                                timePt = 3;
-                                break;
-                            default:
-                            // do nothing
-                        }
+                        if(snapCounter - importAtSnap == snapPerYr){
+                            timePt = 0;
+                        }else if (snapCounter - importAtSnap == 2 * snapPerYr){
+                            timePt = 1;
+                        }else if (snapCounter - importAtSnap == 5 * snapPerYr){
+                             timePt = 2;
+                        }else if (snapCounter - importAtSnap == 10 * snapPerYr){
+                             timePt = 3;
+                        }                                                
+                       
                         if (timePt >= 0) {
                             prevalenceByStrainAt[simCounter][timePt][0] = entry[snapCounter][PREVAL_ALL][0];
                             prevalenceByStrainAt[simCounter][timePt][1] = entry[snapCounter][PREVAL_ALL][1];
