@@ -70,6 +70,9 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * 20180522 - Add treatment efficiency by site</p>
  * <p>
  * 20180528 - Add multiple strain support </p>
+ * <p>
+ * 20180920 - Add support for tranmission for kissing, slight change to the output definition of performAct to include tranmission from all site
+ * </p>
  *
  *
  */
@@ -78,10 +81,13 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int NUM_IN_POP = 10000;
     public static final int ACT_ANAL = 0;  // Coresponds to length of MSM_POP_REG_ACT_FREQ and MSM_POP_CAS_ACT_FREQ
     public static final int ACT_ORAL = 1;
-    // Rimming 
     public static final int ACT_RIMMING = 2;
+    public static final int ACT_KISSING = 3;
+
     public static final int TRAN_SUSC_INDEX_RIMMING_ANAL = 3; // After G,A,R
     public static final int TRAN_SUSC_INDEX_RIMMING_ORAL = TRAN_SUSC_INDEX_RIMMING_ANAL + 1;
+    public static final int TRAN_SUSC_INDEX_KISSING = TRAN_SUSC_INDEX_RIMMING_ORAL + 1;
+
     public static final int MSM_POP_INDEX_OFFSET = AbstractRegCasRelMapPopulation.LENGTH_FIELDS;
     public static final int MSM_POP_REG_ACT_FREQ = MSM_POP_INDEX_OFFSET;
     public static final int MSM_POP_CAS_ACT_FREQ = MSM_POP_REG_ACT_FREQ + 1;
@@ -102,7 +108,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int MSM_TREATMENT_EFFICIENCY = MSM_SCREENING_SETTING_TARGETED + 1;
     public static final int LENGTH_FIELDS_MSM_POP = MSM_TREATMENT_EFFICIENCY + 1;
     public static final Object[] DEFAULT_MSM_FIELDS = {
-        // Min/max for anal and oral sex for reg (per week) and causal relationship (per partnership), from 
+        // Min/max for anal and oral sex for reg (per day) and causal relationship (per partnership), from 
         // Crawford et al. Number of risk acts by relationship status
         //  and partner serostatus: Findings from the HIM cohort of homosexually active men in Sydney,
         //   Australia. AIDS and behavior. 2006;10(3):325-31.
@@ -160,7 +166,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     };
     public static final int MAPPING_REG = 0;
     public static final int MAPPING_CAS = 1;
-    
+
     // Pop Snap Count (Acumulative)    
     private transient final int[] cumulativeIncidencesBySites = new int[3]; // 3 Sites, in accordance to Relationship_MSM.Site_X
     // Screening (General)
@@ -210,12 +216,12 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         super.setFields(newFields);
 
     }
-    
-    public static MSMPopulation importMSMPopulation(java.io.ObjectInputStream objStr) 
-            throws IOException, ClassNotFoundException{
+
+    public static MSMPopulation importMSMPopulation(java.io.ObjectInputStream objStr)
+            throws IOException, ClassNotFoundException {
         Object[] importFields = (Object[]) objStr.readObject();
-        Long seed = (Long) importFields[MSMPopulation.FIELDS_SEED];                                
-        MSMPopulation newPop = new MSMPopulation(seed);        
+        Long seed = (Long) importFields[MSMPopulation.FIELDS_SEED];
+        MSMPopulation newPop = new MSMPopulation(seed);
         newPop.setFields(importFields);
         return newPop;
     }
@@ -662,7 +668,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     protected boolean[][] performAct(RegCasRelationship rel) {
 
         boolean[] hasActed = rel.hasActToday();
-        boolean[][] res = new boolean[hasActed.length][3]; // hasUnprotectedSex[actType]{occured, from_genital_person_1, from_genital_person_2}
+        boolean[][] res = new boolean[hasActed.length][3]; // hasUnprotectedSex[actType]{occured, from_person_1, from_person_2}
 
         int[][] infectStat = new int[rel.getLinks().length][];
         int[][] strainStat = new int[rel.getLinks().length][];
@@ -682,194 +688,216 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         for (int a = 0; a < res.length; a++) {
             if (hasActed[a]) {
+                switch (a) {
+                    case ACT_KISSING:
+                        res[a][0] = true;
+                        res[a][1] = false;
+                        res[a][2] = false;
+                        double r2r = ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_KISSING][0]
+                                * ((double[][]) getFields()[FIELDS_SUSCEPT])[TRAN_SUSC_INDEX_KISSING][0];
+                        boolean tranR2R = r2r > 0
+                                && strainStat[0][RelationshipPerson_MSM.SITE_R] != strainStat[1][RelationshipPerson_MSM.SITE_R];
 
-                if (a == ACT_RIMMING) { // Rimming                     
+                        if (tranR2R) {
+                            for (int s = 0; s < rel.getLinks().length; s++) {
+                                if (strainStat[s][RelationshipPerson_MSM.SITE_R] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R]
+                                        && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_ASY
+                                        || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_SYM)) {
 
-                    res[a][0] = true;
-                    res[a][1] = false;
-                    res[a][2] = false;
-                    for (int s = 0; s < rel.getLinks().length; s++) {
+                                    if (r2r < 1) {
+                                        tranR2R = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_R]).getRNG().nextDouble() < r2r;
+                                    }
+
+                                    if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_R")) & (1 << ACT_KISSING)) != 0) {
+                                        tranR2R = false;
+                                    }
+
+                                    if (tranR2R) {
+                                        res[a][(s + 1) % 2] = true;
+                                        cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_R]++;
+                                        person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_R, true);
+                                        if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                            ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_R]
+                                                    = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_R];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case ACT_RIMMING:
+                        res[a][0] = true;
+                        res[a][1] = false;
+                        res[a][2] = false;
 
                         double a2r = ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_RIMMING_ANAL][0]
                                 * ((double[][]) getFields()[FIELDS_SUSCEPT])[TRAN_SUSC_INDEX_RIMMING_ORAL][0];
-
                         double r2a = ((double[][]) getFields()[FIELDS_SUSCEPT])[TRAN_SUSC_INDEX_RIMMING_ANAL][0]
                                 * ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_RIMMING_ORAL][0];
 
                         boolean tranA2R = a2r > 0;
                         boolean tranR2A = r2a > 0;
 
-                        boolean susR = strainStat[s][RelationshipPerson_MSM.SITE_R] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A];
-                        //infectStat[s][RelationshipPerson_MSM.SITE_R] == AbstractIndividualInterface.INFECT_S;
-                        boolean susA = strainStat[s][RelationshipPerson_MSM.SITE_A] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R];
-                        //infectStat[s][RelationshipPerson_MSM.SITE_A] == AbstractIndividualInterface.INFECT_S;    
+                        for (int s = 0; s < rel.getLinks().length; s++) {
+                            boolean susR = strainStat[s][RelationshipPerson_MSM.SITE_R] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A];
+                            boolean susA = strainStat[s][RelationshipPerson_MSM.SITE_A] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R];
 
-                        // Anal to oral   
-                        if (tranA2R && susR
-                                && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_ASY
-                                || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_SYM)) {
-
-                            if (a2r < 1) {
-                                tranA2R = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_A]).getRNG().nextDouble() < a2r;
-                            }
-
-                            if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_R")) & (1 << ACT_RIMMING)) != 0) {
-                                tranA2R = false;
-                            }
-
-                            if (tranA2R && !person[s].getLastActInfectious()[RelationshipPerson_MSM.SITE_R]) {
-                                cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_R]++;
-                                person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_R, true);
-
-                                if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
-                                    ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_R] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_A];
+                            // Anal to oral
+                            if (tranA2R && susR
+                                    && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_ASY
+                                    || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_SYM)) {
+                                if (a2r < 1) {
+                                    tranA2R = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_A]).getRNG().nextDouble() < a2r;
                                 }
-                            }
-                        }
-
-                        // Oral to anal                
-                        if (tranR2A && susA
-                                && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_ASY
-                                || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_SYM)) {
-
-                            if (r2a < 1) {
-                                tranR2A = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_R]).getRNG().nextDouble() < r2a;
-                            }
-
-                            if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_A")) & (1 << ACT_RIMMING)) != 0) {
-                                tranR2A = false;
-                            }
-
-                            if (tranR2A && !person[s].getLastActInfectious()[RelationshipPerson_MSM.SITE_A]) {
-                                                                
-                                cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_A]++;
-                                person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_A, true);
-
-                                if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
-                                    ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_A] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_R];
+                                if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_R")) & (1 << ACT_RIMMING)) != 0) {
+                                    tranA2R = false;
                                 }
-                            }
+                                if (tranA2R && !person[s].getLastActInfectious()[RelationshipPerson_MSM.SITE_R]) {
+                                    cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_R]++;
+                                    res[a][(s + 1) % 2] = true;
+                                    person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_R, true);
 
-                        }
-
-                    }
-
-                } else {
-                    int nonGTarget = a == ACT_ANAL ? RelationshipPerson_MSM.SITE_A : RelationshipPerson_MSM.SITE_R;
-
-                    String nonGTargetImmune = a == ACT_ANAL ? "PARAM_IMMUNE_ACT_SITE_A" : "PARAM_IMMUNE_ACT_SITE_R";
-
-                    float probCondomUse = rel.getType() == RegCasRelationship.REL_TYPE_REG
-                            ? ((float[]) getFields()[MSM_POP_REG_CONDOM_USAGE])[a]
-                            : ((float[]) getFields()[MSM_POP_CAS_CONDOM_USAGE])[a];
-
-                    if (protectAdj != null && protectAdj.length > 0) {
-                        if (getGlobalTime() >= protectAdj[0]) {
-                            if (protectAdj[a + 1] >= 0) {
-                                probCondomUse *= protectAdj[a + 1];
-                            } else {
-                                probCondomUse = -protectAdj[a + 1]; // If < 0, replacement instead
-                            }
-                        }
-                    }
-
-                    boolean unprotectedAct = probCondomUse == 0;
-
-                    if (!unprotectedAct && probCondomUse < 1) {
-                        unprotectedAct = getRNG().nextFloat() > probCondomUse;
-                    }
-
-                    for (int s = 0; s < rel.getLinks().length; s++) {
-
-                        if (unprotectedAct) {
-                            if (a == ACT_ANAL) {
-                                person[s].setParameter("PARAM_LAST_UNPROTECTED_ANAL_SEX_AT_AGE", person[s].getAge());
-                            } else {
-                                person[s].setParameter("PARAM_LAST_UNPROTECTED_ORAL_SEX_AT_AGE", person[s].getAge());
-                            }
-
-                            res[a][0] = true;
-
-                            double tranSucProb;
-
-                            boolean susNonG = strainStat[s][nonGTarget] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G];
-                            //infectStat[s][nonGTarget] == AbstractIndividualInterface.INFECT_S;
-                            boolean susG = strainStat[s][RelationshipPerson_MSM.SITE_G] != strainStat[(s + 1) % 2][nonGTarget];
-                            //infectStat[s][RelationshipPerson_MSM.SITE_G] == AbstractIndividualInterface.INFECT_S;
-
-                            if (susNonG && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G] == GonorrhoeaSiteInfection.STATUS_ASY
-                                    || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G] == GonorrhoeaSiteInfection.STATUS_SYM)) {
-
-                                res[a][(s + 1) % 2] = true;
-
-                                // From G to nonG  
-                                if (getFields()[FIELDS_SUSCEPT] != null) {
-                                    if (person[s].getProbSusBySite()[nonGTarget] != ((double[][]) getFields()[FIELDS_SUSCEPT])[nonGTarget][0]) {
-                                        person[s].getProbSusBySite()[nonGTarget] = ((double[][]) getFields()[FIELDS_SUSCEPT])[nonGTarget][0];
-                                    }
-                                }
-
-                                tranSucProb = person[(s + 1) % 2].getProbTransBySite()[RelationshipPerson_MSM.SITE_G]
-                                        * person[s].getProbSusBySite()[nonGTarget];
-
-                                if ((((int) person[s].getParameter(nonGTargetImmune)) & (1 << a)) != 0) {
-                                    // E.g. Insertive to anal or oral sex
-                                    tranSucProb = 0;
-                                }
-
-                                boolean g2NG = tranSucProb >= 1;
-                                if (!g2NG && tranSucProb > 0) {
-                                    g2NG = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_G]).getRNG().nextDouble()
-                                            < tranSucProb;
-                                }
-
-                                if (g2NG) {
-                                    cumulativeIncidencesBySites[nonGTarget]++;
-                                    person[s].setLastActInfectious(nonGTarget, true);
                                     if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
-                                        ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[nonGTarget] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_G];
+                                        ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_R] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_A];
                                     }
+                                }
+                            }
 
+                            // Oral to anal
+                            if (tranR2A && susA
+                                    && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_ASY
+                                    || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_SYM)) {
+
+                                if (r2a < 1) {
+                                    tranR2A = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_R]).getRNG().nextDouble() < r2a;
+                                }
+                                if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_A")) & (1 << ACT_RIMMING)) != 0) {
+                                    tranR2A = false;
+                                }
+                                if (tranR2A && !person[s].getLastActInfectious()[RelationshipPerson_MSM.SITE_A]) {
+                                    res[a][(s + 1) % 2] = true;
+                                    cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_A]++;
+                                    person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_A, true);
+                                    if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                        ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_A] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_R];
+                                    }
                                 }
 
                             }
-                            if (susG && (infectStat[(s + 1) % 2][nonGTarget] == GonorrhoeaSiteInfection.STATUS_ASY
-                                    || infectStat[(s + 1) % 2][nonGTarget] == GonorrhoeaSiteInfection.STATUS_SYM)) {
 
-                                // From nonG to G
-                                if (getFields()[FIELDS_SUSCEPT] != null) {
-                                    if (person[s].getProbSusBySite()[RelationshipPerson_MSM.SITE_G]
-                                            != ((double[][]) getFields()[FIELDS_SUSCEPT])[RelationshipPerson_MSM.SITE_G][0]) {
-                                        person[s].getProbSusBySite()[RelationshipPerson_MSM.SITE_G] = ((double[][]) getFields()[FIELDS_SUSCEPT])[RelationshipPerson_MSM.SITE_G][0];
-                                    }
+                        }
+                        break;
+                    case ACT_ANAL:
+                    case ACT_ORAL:
+                        int nonGTarget = a == ACT_ANAL ? RelationshipPerson_MSM.SITE_A : RelationshipPerson_MSM.SITE_R;
+                        String nonGTargetImmune = a == ACT_ANAL ? "PARAM_IMMUNE_ACT_SITE_A" : "PARAM_IMMUNE_ACT_SITE_R";
+                        float probCondomUse = rel.getType() == RegCasRelationship.REL_TYPE_REG
+                                ? ((float[]) getFields()[MSM_POP_REG_CONDOM_USAGE])[a]
+                                : ((float[]) getFields()[MSM_POP_CAS_CONDOM_USAGE])[a];
+
+                        // Condom usage adjust
+                        if (protectAdj != null && protectAdj.length > 0) {
+                            if (getGlobalTime() >= protectAdj[0]) {
+                                if (protectAdj[a + 1] >= 0) {
+                                    probCondomUse *= protectAdj[a + 1];
+                                } else {
+                                    probCondomUse = -protectAdj[a + 1]; // If < 0, replacement instead
                                 }
-
-                                tranSucProb = person[(s + 1) % 2].getProbTransBySite()[nonGTarget]
-                                        * person[s].getProbSusBySite()[RelationshipPerson_MSM.SITE_G];
-
-                                if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_G")) & (1 << a)) != 0) {
-                                    // Eg. Receptive to anal or oral sex
-                                    tranSucProb = 0;
-                                }
-
-                                boolean nG2G = tranSucProb >= 1;
-
-                                if (!nG2G && tranSucProb > 0) {
-                                    nG2G = ((GonorrhoeaSiteInfection) getInfList()[nonGTarget]).getRNG().nextDouble()
-                                            < tranSucProb;
-                                }
-                                if (nG2G) {
-
-                                    cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_G]++;
-                                    person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_G, true);
-                                    if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
-                                        ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_G] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[nonGTarget];
-                                    }
-                                }
-
                             }
                         }
-                    }
+
+                        // Determine if condom is use for the act
+                        boolean unprotectedAct = probCondomUse == 0;
+                        if (!unprotectedAct && probCondomUse < 1) {
+                            unprotectedAct = getRNG().nextFloat() > probCondomUse;
+                        }
+
+                        for (int s = 0; s < rel.getLinks().length; s++) {
+                            if (unprotectedAct) {
+                                if (a == ACT_ANAL) {
+                                    person[s].setParameter("PARAM_LAST_UNPROTECTED_ANAL_SEX_AT_AGE", person[s].getAge());
+                                } else if (a == ACT_ORAL) {
+                                    person[s].setParameter("PARAM_LAST_UNPROTECTED_ORAL_SEX_AT_AGE", person[s].getAge());
+                                }
+                                res[a][0] = true;
+
+                                double tranSucProb;
+                                boolean susNonG = strainStat[s][nonGTarget] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G];
+                                boolean susG = strainStat[s][RelationshipPerson_MSM.SITE_G] != strainStat[(s + 1) % 2][nonGTarget];
+
+                                if (susNonG && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G] == GonorrhoeaSiteInfection.STATUS_ASY
+                                        || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_G] == GonorrhoeaSiteInfection.STATUS_SYM)) {
+
+                                    // From G to nonG - set to global version if available
+                                    if (getFields()[FIELDS_SUSCEPT] != null) {
+                                        if (person[s].getProbSusBySite()[nonGTarget] != ((double[][]) getFields()[FIELDS_SUSCEPT])[nonGTarget][0]) {
+                                            person[s].getProbSusBySite()[nonGTarget] = ((double[][]) getFields()[FIELDS_SUSCEPT])[nonGTarget][0];
+                                        }
+                                    }
+
+                                    tranSucProb = person[(s + 1) % 2].getProbTransBySite()[RelationshipPerson_MSM.SITE_G]
+                                            * person[s].getProbSusBySite()[nonGTarget];
+
+                                    if ((((int) person[s].getParameter(nonGTargetImmune)) & (1 << a)) != 0) {
+                                        // E.g. Insertive to anal or oral sex
+                                        tranSucProb = 0;
+                                    }
+
+                                    boolean g2NG = tranSucProb>0;
+                                    if (g2NG && tranSucProb < 1) {
+                                        g2NG = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_G]).getRNG().nextDouble()
+                                                < tranSucProb;
+                                    }
+
+                                    if (g2NG) {
+                                        res[a][(s + 1) % 2] = true;
+                                        cumulativeIncidencesBySites[nonGTarget]++;
+                                        person[s].setLastActInfectious(nonGTarget, true);
+                                        if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                            ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[nonGTarget] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[RelationshipPerson_MSM.SITE_G];
+                                        }
+
+                                    }
+
+                                }
+                                if (susG && (infectStat[(s + 1) % 2][nonGTarget] == GonorrhoeaSiteInfection.STATUS_ASY
+                                        || infectStat[(s + 1) % 2][nonGTarget] == GonorrhoeaSiteInfection.STATUS_SYM)) {
+
+                                    // From nonG to G - set to global version if available
+                                    if (getFields()[FIELDS_SUSCEPT] != null) {
+                                        if (person[s].getProbSusBySite()[RelationshipPerson_MSM.SITE_G]
+                                                != ((double[][]) getFields()[FIELDS_SUSCEPT])[RelationshipPerson_MSM.SITE_G][0]) {
+                                            person[s].getProbSusBySite()[RelationshipPerson_MSM.SITE_G] = ((double[][]) getFields()[FIELDS_SUSCEPT])[RelationshipPerson_MSM.SITE_G][0];
+                                        }
+                                    }
+
+                                    tranSucProb = person[(s + 1) % 2].getProbTransBySite()[nonGTarget]
+                                            * person[s].getProbSusBySite()[RelationshipPerson_MSM.SITE_G];
+
+                                    if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_G")) & (1 << a)) != 0) {
+                                        // Eg. Receptive to anal or oral sex
+                                        tranSucProb = 0;
+                                    }
+
+                                    boolean nG2G = tranSucProb>0;
+
+                                    if (nG2G && tranSucProb < 1)  {
+                                        nG2G = ((GonorrhoeaSiteInfection) getInfList()[nonGTarget]).getRNG().nextDouble()
+                                                < tranSucProb;
+                                    }
+                                    if (nG2G) {
+                                        res[a][(s + 1) % 2] = true;
+                                        cumulativeIncidencesBySites[RelationshipPerson_MSM.SITE_G]++;
+                                        person[s].setLastActInfectious(RelationshipPerson_MSM.SITE_G, true);
+                                        if (person[s] instanceof MultiSiteMultiStrainPersonInterface) {
+                                            ((MultiSiteMultiStrainPersonInterface) person[s]).getLastActStainsAtSite()[RelationshipPerson_MSM.SITE_G] = ((MultiSiteMultiStrainPersonInterface) person[(s + 1) % 2]).getCurrentStrainsAtSite()[nonGTarget];
+                                        }
+                                    }
+
+                                }
+                            }
+                        }
+                        break;
                 }
             }
         }
