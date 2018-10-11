@@ -26,7 +26,7 @@ import population.person.MultiSiteMultiStrainPersonInterface;
 
 /**
  * @author Ben Hui
- * @version 20180528
+ * @version 20181011
  *
  * <p>
  * History:</p>
@@ -71,7 +71,10 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * <p>
  * 20180528 - Add multiple strain support </p>
  * <p>
- * 20180920 - Add support for tranmission for kissing, slight change to the output definition of performAct to include tranmission from all site
+ * 20180920 - Add support for tranmission for kissing, slight change to the output definition of performAct to include tranmission from all site * 
+ * </p>
+ * <p>
+ * 20181011 - Add support for alterative format for freq. of act based on number of partner in last 12 months  
  * </p>
  *
  *
@@ -113,6 +116,9 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         //  and partner serostatus: Findings from the HIM cohort of homosexually active men in Sydney,
         //   Australia. AIDS and behavior. 2006;10(3):325-31.
         // Alterative format : {[min, max, prob...], [min, max, prob...],}             
+        // Alterative format: {[-1, number partners limit over 6 months ], 
+        //                      [prob of anal under limit, prob of anal over limit],
+        //                      [prob of oral under limit, prob of oral over limit]... }         
         new float[][]{{0.2286f, 0.3429f}, {0.2286f, 0.3429f}}, // {{1.6f / 7, 2.4f / 7}, {1.6f / 7, 2.4f / 7}},
         new float[][]{{1, 8, 0.415f}, {1, 10, 0.825f}},
         // Condom usage by relation type and act
@@ -120,6 +126,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         // Unprotected anal intercourse at Mel (R,C) =  (28.6%, 23.3% ) 2013 (34.8% 26.3%) 2012
         new float[]{1 - 0.286f, 0},
         new float[]{1 - 0.233f, 0},
+        // MSM_REG_LENTH_AVE
         (double) 4 * 360,
         // GCPS Melbourne 2013: Reg partnership 33.0% only regular, 24.2 % only causal, 26.9% has both with 15.9 has no sex
         new float[]{0.33f / (0.33f + 0.242f + 0.269f), 0.242f / (0.33f + 0.242f + 0.269f), 0.269f / (0.33f + 0.242f + 0.269f)},
@@ -937,6 +944,30 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         }
 
         actFreq = Arrays.copyOf(actFreq, actFreq.length); // So it won't change the global value 
+        
+        if(actFreq.length > 0 && actFreq[0][0] == -1){
+            // For Alterative format: {[-1, number partners limit], 
+            //                      [prob of anal under limit, prob of anal over limit],
+            //                      [prob of oral under limit, prob of oral over limit]... }                   
+            
+            
+            float[][] actFreqAlt = new float[actFreq.length -1][2];                         
+            for (AbstractIndividualInterface pair1 : pair) {
+                RelationshipPerson_MSM person = (RelationshipPerson_MSM) pair1;
+                int numCasualPast6Months = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_NUM_CASUAL_IN_LAST_6_MONTHS))).intValue();                
+                for(int a = 0; a < actFreqAlt.length; a++){                    
+                    actFreqAlt[a][0] +=  actFreq[a+1][(numCasualPast6Months <= actFreq[0][1])?0:1] /2;
+                    actFreqAlt[a][1] =  actFreqAlt[a][0];                    
+                }                                                               
+            }                                                
+            
+            actFreq = actFreqAlt;
+        }
+        
+        
+        
+        
+        
 
         relTotal[mapType]++;
         relLen[mapType] += dur;

@@ -26,15 +26,17 @@ import population.person.MultiSiteMultiStrainPersonInterface;
 /**
  *
  * @author Ben Hui
- * @version 20180528
+ * @version 20181011
  *
- * History:  <pre>
+ * History: 
+ * <pre> 
  * 20150313
  *  - Add infection history support
  * 20150523
  *  - Add additional setInfectionIntroAt function for import infection from prop file
  * 20180528
  *  - Simplfy strain intro add method.
+ * 
  *
  * </pre>
  *
@@ -312,8 +314,8 @@ public class SinglePopRunnable implements Runnable {
         if (model_init_val != null) {
             Object[] propInitVal = new Object[model_init_val.length];
             for (int i = 0; i < model_init_val.length; i++) {
-                if (model_init_val[i] != null) {
-                    propInitVal[i] = StaticMethods.propStrToObject(model_init_val[i],
+                if (model_init_val[i] != null) {                    
+                    propInitVal[i] = util.PropValUtils.propStrToObject(model_init_val[i],
                             ((AbstractRegCasRelMapPopulation) getPopulation()).getFieldClass(i));
                 }
             }

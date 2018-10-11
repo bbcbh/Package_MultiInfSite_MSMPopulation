@@ -19,6 +19,7 @@ import optimisation.AbstractResidualFunc;
 import optimisation.NelderMeadOptimiser;
 import optimisation.ParameterConstraintTransform;
 import population.MSMPopulation;
+import population.person.RelationshipPerson_MSM;
 import static sim.SimulationInterface.PROP_BURNIN;
 import static sim.SimulationInterface.PROP_INFECTION_INTRO;
 import static sim.SimulationInterface.PROP_NUM_SNAP;
@@ -27,10 +28,18 @@ import sim.Simulation_MSM_Population;
 import sim.SinglePopRunnable;
 
 /**
+ * Perform parameter optimisation of MSM model base on number of infection
  *
  * @author Ben Hui
+ * @version 20181011
+ *
+ * <pre>
+ * History:
+ * 20181011 - Renaming of class and add method for 7 tranmission parameter
+ * </pre>
+ *
  */
-public class Optimisation_MSM_TransProb_PrevalFit {
+public class Optimisation_MSM_TransProb_NumInfFit {
 
     public static final String FILENAME_PARAM_CONSTRIANTS = "ParamConstriants.csv";
     public static final String FILENAME_P0 = "Pre_P0.csv";
@@ -39,18 +48,12 @@ public class Optimisation_MSM_TransProb_PrevalFit {
     public static final String FILENAME_OPT_SIMPLEX = "ParamSimplex.obj";
 
     public File baseDir = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Optimsation");
-    public double[] PREVAL_TARGET = new double[]{100, 460, 400};
+    public double[] NUM_INF_TARGET = new double[]{100, 460, 400};
     public int NUM_SIM = 1;
     public long BASESEED = 6109418859537162492l;
     public int NUM_THREAD = Runtime.getRuntime().availableProcessors();
 
-    public static void main(String[] arg) throws IOException, ClassNotFoundException {
-        Optimisation_MSM_TransProb_PrevalFit run = new Optimisation_MSM_TransProb_PrevalFit(arg);
-        run.runOptimisation();
-
-    }
-
-    public Optimisation_MSM_TransProb_PrevalFit(String[] arg) {
+    public Optimisation_MSM_TransProb_NumInfFit(String[] arg) {
         if (arg.length > 0) {
             // ImportPath
             if (!arg[0].isEmpty()) {
@@ -60,7 +63,7 @@ public class Optimisation_MSM_TransProb_PrevalFit {
             if (!arg[1].isEmpty()) {
                 String[] val = arg[1].split(",");
                 for (int i = 0; i < val.length; i++) {
-                    PREVAL_TARGET[i] = Double.parseDouble(val[i]);
+                    NUM_INF_TARGET[i] = Double.parseDouble(val[i]);
                 }
             }
             // Number of sim 
@@ -255,11 +258,42 @@ public class Optimisation_MSM_TransProb_PrevalFit {
 
                 String[] model_init_val = Arrays.copyOf(defaultModelInit, defaultModelInit.length);
 
-                model_init_val[7] = "[[1.0, 0.0], ["
-                        + Double.toString(param[0])
-                        + ", 0.0],["
-                        + Double.toString(param[1])
-                        + ", 0.0],[0.0, 0.0], [0.017804451413023895,0]]";
+                double[][] field_transmit = (double[][]) util.PropValUtils.propStrToObject(model_init_val[MSMPopulation.FIELDS_TRANSMIT], double[][].class);
+                double[][] field_suscept = (double[][]) util.PropValUtils.propStrToObject(model_init_val[MSMPopulation.FIELDS_SUSCEPT], double[][].class);
+
+                // Modified tranmission and susceptibilty behavoir
+                // 0: G to A
+                // 1: A to G
+                // 2: G to R
+                // 3: R to G
+                // 4: A to R
+                // 5: R to A
+                // 6: R to R
+                // Full 7                
+                field_transmit[RelationshipPerson_MSM.SITE_G][0] = 1;  // Baseline
+                field_suscept[RelationshipPerson_MSM.SITE_G][0] = 1;
+
+                // 0: G to A
+                field_suscept[RelationshipPerson_MSM.SITE_A][0] = param[0];   
+                // 1: A to G
+                field_transmit[RelationshipPerson_MSM.SITE_A][0] = param[1]; 
+                // 2: G to R
+                field_suscept[RelationshipPerson_MSM.SITE_R][0] = param[2];   
+                // 3: R to G
+                field_transmit[RelationshipPerson_MSM.SITE_R][0] = param[3]; 
+                // 4: A to R
+                field_transmit[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ANAL][0] = param[4];
+                field_suscept[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ORAL][0] = 1;
+                // 5: R to A
+                field_transmit[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ORAL][0] = param[5];
+                field_suscept[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ANAL][0] = 1;                
+                // 6: R to R
+                field_transmit[MSMPopulation.TRAN_SUSC_INDEX_KISSING][0] = param[6];
+                field_suscept[MSMPopulation.TRAN_SUSC_INDEX_KISSING][0] = 1;    
+                
+                model_init_val[MSMPopulation.FIELDS_TRANSMIT] = util.PropValUtils.objectToPropStr(field_transmit, field_transmit.getClass());
+                model_init_val[MSMPopulation.FIELDS_SUSCEPT] = util.PropValUtils.objectToPropStr(field_suscept, field_suscept.getClass());
+
                 runnable[r].model_prop_initialise(((Number) propVal[PROP_BURNIN]).intValue(), model_init_val);
 
                 if (propVal[PROP_INFECTION_INTRO] != null) {
@@ -274,7 +308,7 @@ public class Optimisation_MSM_TransProb_PrevalFit {
                     }
                 }
 
-                if (NUM_THREAD <= 1 && exec != null) {
+                if (NUM_THREAD <= 1 || exec == null) {
                     runnable[r].run();
 
                 } else {
@@ -294,9 +328,8 @@ public class Optimisation_MSM_TransProb_PrevalFit {
                     exec = null;
                 }
             }
-            
-            // Final run (if needed)
 
+            // Final run (if needed)
             if (exec != null) {
                 try {
                     exec.shutdown();
@@ -317,7 +350,7 @@ public class Optimisation_MSM_TransProb_PrevalFit {
 
             for (int r = 0; r < runnable.length; r++) {
                 for (int i = 0; i < res.length; i++) {
-                    res[i] += (runInfected[r][i] - PREVAL_TARGET[i]) / runnable.length;
+                    res[i] += (runInfected[r][i] - NUM_INF_TARGET[i]) / runnable.length;
                 }
             }
 

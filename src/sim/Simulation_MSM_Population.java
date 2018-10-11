@@ -53,21 +53,29 @@ import util.runnable.ExtractFieldRunnable;
  *     - Add support for skip thread based on snap count
  * 20180531
  *     - Adjustment snapshot count sampling frequency
+ * 20181011
+ *     - Combine optimisation and simulation into a single simulation interface
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
 
     public static final String[] PROP_NAME_MSM_MIS = {
-        "PROP_STRAINS_INTRO_AT", "PROP_STRAINS_COEXIST_MAT"
+        "PROP_STRAINS_INTRO_AT", "PROP_STRAINS_COEXIST_MAT",
+        "PROP_MSM_SIM_TYPE", "PROP_MSM_NUM_INF_TARGET",
+            
     };
 
     public static final Class[] PROP_CLASS_MSM_MIS = {
         float[][].class, // float[]{globaltime, strainNum, site, likelihood to co-exist, number of infection to introduce, frequency (optional) }
         float[][].class, // float[exist_strain][new_strain]{likelihood to coexist}
+        Integer.class, // 0 (default) = simulation, 1 = optimisation
+        String.class, // For optimisation prevalence 
     };
 
     public static final int PROP_STRAINS_INTRO_AT = PROP_NAME.length;
     public static final int PROP_STRAINS_COEXIST_MAT = PROP_STRAINS_INTRO_AT + 1;
+    public static final int PROP_MSM_SIM_TYPE = PROP_STRAINS_COEXIST_MAT + 1;
+    public static final int PROP_MSM_NUM_INF_TARGET = PROP_MSM_SIM_TYPE + 1;
 
     // Output filename
     public static final String[] FILE_NAMES_OBJ = {"endNumInf.obj", "extinctAt.obj", "snapCount.obj",
