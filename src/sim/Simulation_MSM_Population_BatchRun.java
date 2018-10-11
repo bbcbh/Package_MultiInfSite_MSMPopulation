@@ -25,7 +25,7 @@ import opt.Optimisation_MSM_TransProb_NumInfFit;
  */
 public class Simulation_MSM_Population_BatchRun {
 
-    public static void generateResultsInFolders(String[] arg) throws IOException, InterruptedException, FileNotFoundException, ClassNotFoundException {
+    public static void main(String[] arg) throws IOException, InterruptedException, FileNotFoundException, ClassNotFoundException {
 
         Simulation_MSM_Population sim;
         File baseDir = new File(arg[0]);

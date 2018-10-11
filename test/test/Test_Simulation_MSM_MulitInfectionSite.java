@@ -14,7 +14,7 @@ public class Test_Simulation_MSM_MulitInfectionSite {
             //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\1000 Runs",                
         };        
        
-        Simulation_MSM_Population_BatchRun.generateResultsInFolders(grpDirNames);
+        Simulation_MSM_Population_BatchRun.main(grpDirNames);
         
         
     }
