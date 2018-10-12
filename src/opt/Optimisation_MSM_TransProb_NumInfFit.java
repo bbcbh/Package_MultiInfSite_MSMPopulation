@@ -1,5 +1,6 @@
 package opt;
 
+import java.beans.PropertyChangeSupport;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -31,11 +32,12 @@ import sim.SinglePopRunnable;
  * Perform parameter optimisation of MSM model base on number of infection
  *
  * @author Ben Hui
- * @version 20181011
+ * @version 20181012
  *
  * <pre>
  * History:
  * 20181011 - Renaming of class and add method for 7 tranmission parameter
+ * 20181012 - Add dummy PropertyChangeSupport to reduce textual output
  * </pre>
  *
  */
@@ -274,23 +276,23 @@ public class Optimisation_MSM_TransProb_NumInfFit {
                 field_suscept[RelationshipPerson_MSM.SITE_G][0] = 1;
 
                 // 0: G to A
-                field_suscept[RelationshipPerson_MSM.SITE_A][0] = param[0];   
+                field_suscept[RelationshipPerson_MSM.SITE_A][0] = param[0];
                 // 1: A to G
-                field_transmit[RelationshipPerson_MSM.SITE_A][0] = param[1]; 
+                field_transmit[RelationshipPerson_MSM.SITE_A][0] = param[1];
                 // 2: G to R
-                field_suscept[RelationshipPerson_MSM.SITE_R][0] = param[2];   
+                field_suscept[RelationshipPerson_MSM.SITE_R][0] = param[2];
                 // 3: R to G
-                field_transmit[RelationshipPerson_MSM.SITE_R][0] = param[3]; 
+                field_transmit[RelationshipPerson_MSM.SITE_R][0] = param[3];
                 // 4: A to R
                 field_transmit[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ANAL][0] = param[4];
                 field_suscept[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ORAL][0] = 1;
                 // 5: R to A
                 field_transmit[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ORAL][0] = param[5];
-                field_suscept[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ANAL][0] = 1;                
+                field_suscept[MSMPopulation.TRAN_SUSC_INDEX_RIMMING_ANAL][0] = 1;
                 // 6: R to R
                 field_transmit[MSMPopulation.TRAN_SUSC_INDEX_KISSING][0] = param[6];
-                field_suscept[MSMPopulation.TRAN_SUSC_INDEX_KISSING][0] = 1;    
-                
+                field_suscept[MSMPopulation.TRAN_SUSC_INDEX_KISSING][0] = 1;
+
                 model_init_val[MSMPopulation.FIELDS_TRANSMIT] = util.PropValUtils.objectToPropStr(field_transmit, field_transmit.getClass());
                 model_init_val[MSMPopulation.FIELDS_SUSCEPT] = util.PropValUtils.objectToPropStr(field_suscept, field_suscept.getClass());
 
@@ -312,6 +314,16 @@ public class Optimisation_MSM_TransProb_NumInfFit {
                     runnable[r].run();
 
                 } else {
+                    runnable[r].setProgressSupport(
+                            new PropertyChangeSupport(runnable[r]) {
+                        @Override
+                        public void firePropertyChange(String string, Object o, Object o2) {
+                            // Dummy - do nothing
+                        }
+
+                    }
+                    );
+
                     exec.submit(runnable[r]);
                     numInExe++;
                 }

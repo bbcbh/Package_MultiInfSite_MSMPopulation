@@ -28,15 +28,16 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * @author Ben Hui
  * @version 20181011
  *
- * History: 
- * <pre> 
+ * History:  <pre> 
  * 20150313
  *  - Add infection history support
  * 20150523
  *  - Add additional setInfectionIntroAt function for import infection from prop file
  * 20180528
  *  - Simplfy strain intro add method.
- * 
+ * 20181012
+ *  - Remove export population if basedir is null
+ *
  *
  * </pre>
  *
@@ -272,39 +273,41 @@ public class SinglePopRunnable implements Runnable {
     }
 
     public void exportPopAt(boolean forced) {
-       
 
-        if (forced ||(exportAt != null && exportAtPt < exportAt.length)) {
+        if (baseDir != null) {
 
-            if (!forced) {
-                while (exportAt[exportAtPt] < getPopulation().getGlobalTime()) {
-                    exportAtPt++;
-                }
-            }
-
-            if (forced || exportAt[exportAtPt] == getPopulation().getGlobalTime()) {
-
-                File exportPopFileDir = new File(baseDir, EXPORT_PREFIX + Integer.toString(getPopulation().getGlobalTime()));
-                File exportPopFileZip = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId() + ".zip");
-
-                try {
-                    exportPopFileDir.mkdirs();
-                    File exportPopFileRaw = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId());
-
-                    try (ObjectOutputStream outStr = new ObjectOutputStream(new FileOutputStream(exportPopFileRaw))) {
-                        getPopulation().exportPop(outStr);
-                    }
-                    util.FileZipper.zipFile(exportPopFileRaw, exportPopFileZip);
-                    exportPopFileRaw.delete();
-
-                } catch (IOException ex) {
-                    ex.printStackTrace(System.err);
-                    showStrStatus("Error in exporting pop file " + exportPopFileZip.getAbsolutePath());
-
-                }
+            if (forced || (exportAt != null && exportAtPt < exportAt.length)) {
 
                 if (!forced) {
-                    exportAtPt++;
+                    while (exportAt[exportAtPt] < getPopulation().getGlobalTime()) {
+                        exportAtPt++;
+                    }
+                }
+
+                if (forced || exportAt[exportAtPt] == getPopulation().getGlobalTime()) {
+
+                    File exportPopFileDir = new File(baseDir, EXPORT_PREFIX + Integer.toString(getPopulation().getGlobalTime()));
+                    File exportPopFileZip = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId() + ".zip");
+
+                    try {
+                        exportPopFileDir.mkdirs();
+                        File exportPopFileRaw = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId());
+
+                        try (ObjectOutputStream outStr = new ObjectOutputStream(new FileOutputStream(exportPopFileRaw))) {
+                            getPopulation().exportPop(outStr);
+                        }
+                        util.FileZipper.zipFile(exportPopFileRaw, exportPopFileZip);
+                        exportPopFileRaw.delete();
+
+                    } catch (IOException ex) {
+                        ex.printStackTrace(System.err);
+                        showStrStatus("Error in exporting pop file " + exportPopFileZip.getAbsolutePath());
+
+                    }
+
+                    if (!forced) {
+                        exportAtPt++;
+                    }
                 }
             }
         }
@@ -314,7 +317,7 @@ public class SinglePopRunnable implements Runnable {
         if (model_init_val != null) {
             Object[] propInitVal = new Object[model_init_val.length];
             for (int i = 0; i < model_init_val.length; i++) {
-                if (model_init_val[i] != null) {                    
+                if (model_init_val[i] != null) {
                     propInitVal[i] = util.PropValUtils.propStrToObject(model_init_val[i],
                             ((AbstractRegCasRelMapPopulation) getPopulation()).getFieldClass(i));
                 }
@@ -823,10 +826,10 @@ public class SinglePopRunnable implements Runnable {
                 ArrayList<AbstractIndividualInterface> candidate = new ArrayList<>();
 
                 for (AbstractIndividualInterface p : getPopulation().getPop()) {
-                    if (p.getInfectionStatus()[site] != AbstractIndividualInterface.INFECT_S 
-                            && p.getTimeUntilNextStage(site) > 1) {                                                
+                    if (p.getInfectionStatus()[site] != AbstractIndividualInterface.INFECT_S
+                            && p.getTimeUntilNextStage(site) > 1) {
                         if (p instanceof MultiSiteMultiStrainPersonInterface) {
-                            int strain = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite()[site];                            
+                            int strain = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite()[site];
                             if ((strain & (1 << strainId)) == 0) {
                                 candidate.add(p);
                             }
@@ -836,15 +839,14 @@ public class SinglePopRunnable implements Runnable {
 
                 int numNewInfected = Math.min(numInfect, candidate.size());
                 AbstractIndividualInterface[] canArr = candidate.toArray(new AbstractIndividualInterface[candidate.size()]);
-               
 
                 for (int i = 0; i < canArr.length && numNewInfected > 0; i++) {
                     if (getPopulation().getInfList()[site].getRNG().nextInt(canArr.length - i) < numNewInfected) {
                         //int orgStrain = ((MultiSiteMultiStrainPersonInterface) canArr[i]).getCurrentStrainsAtSite()[site];
                         ((MultiSiteMultiStrainPersonInterface) canArr[i]).setCurrentStrainAtSite(site, 1 << strainId);
-                        numNewInfected--;                        
-                        
-                        System.out.println("S" + getId() + ": switching #" + canArr[i].getId() + "'s infection at site " + site 
+                        numNewInfected--;
+
+                        System.out.println("S" + getId() + ": switching #" + canArr[i].getId() + "'s infection at site " + site
                                 + " to strain 0b" + Integer.toBinaryString(1 << strainId) + " at " + getPopulation().getGlobalTime());
                     }
                 }

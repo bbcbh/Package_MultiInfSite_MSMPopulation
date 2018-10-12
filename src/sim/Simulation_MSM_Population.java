@@ -61,9 +61,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public static final String[] PROP_NAME_MSM_MIS = {
         "PROP_STRAINS_INTRO_AT", "PROP_STRAINS_COEXIST_MAT",
-        "PROP_MSM_SIM_TYPE", "PROP_MSM_NUM_INF_TARGET",
-            
-    };
+        "PROP_MSM_SIM_TYPE", "PROP_MSM_NUM_INF_TARGET",};
 
     public static final Class[] PROP_CLASS_MSM_MIS = {
         float[][].class, // float[]{globaltime, strainNum, site, likelihood to co-exist, number of infection to introduce, frequency (optional) }
@@ -381,8 +379,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                 if (runnable == null || runnable.length != numThreads) {
                     runnable = new SinglePopRunnable[numThreads];
-                }                                    
-                
+                }
+
                 executor = Executors.newFixedThreadPool(numThreads);
 
                 for (int r = 0; r < runnable.length; r++) {
@@ -673,45 +671,36 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
             //Format: from snapshotCountClassifier
             final int PREVAL_ALL = 0;
-            final int PREVAL_G = 0;
-            final int PREVAL_A = 0;
-            final int PREVAL_R = 0;
-                                   
-            
-            
-            
 
             for (int[][][] entry : entCollection) {
                 int importAtSnap = -1;
-                
+
                 int snapFreq = (int) propVal[PROP_SNAP_FREQ];
-                final int snapPerYr = 360/snapFreq;
-                
-                
-                if(propVal[PROP_STRAINS_INTRO_AT] != null){
-                    float[] inFirstStrain  = ((float[][]) propVal[PROP_STRAINS_INTRO_AT])[0];                    
-                    int importTime = (int) inFirstStrain[0];       
-                    int burnIn = propVal[PROP_BURNIN] == null?  0: (int) propVal[PROP_BURNIN];                    
-                    importAtSnap = ((importTime - burnIn) / snapFreq) -1;
+                final int snapPerYr = 360 / snapFreq;
+
+                if (propVal[PROP_STRAINS_INTRO_AT] != null) {
+                    float[] inFirstStrain = ((float[][]) propVal[PROP_STRAINS_INTRO_AT])[0];
+                    int importTime = (int) inFirstStrain[0];
+                    int burnIn = propVal[PROP_BURNIN] == null ? 0 : (int) propVal[PROP_BURNIN];
+                    importAtSnap = ((importTime - burnIn) / snapFreq) - 1;
                 }
-                
 
                 for (int snapCounter = 0; snapCounter < entry.length; snapCounter++) {
                     if (entry[snapCounter][PREVAL_ALL][2] + entry[snapCounter][PREVAL_ALL][3] > 0) {
-                        newStrainExinctAtSnapshot[simCounter]++;                        
+                        newStrainExinctAtSnapshot[simCounter]++;
                     }
                     if (importAtSnap > 0) {
                         int timePt = -1;
-                        if(snapCounter - importAtSnap == snapPerYr){
+                        if (snapCounter - importAtSnap == snapPerYr) {
                             timePt = 0;
-                        }else if (snapCounter - importAtSnap == 2 * snapPerYr){
+                        } else if (snapCounter - importAtSnap == 2 * snapPerYr) {
                             timePt = 1;
-                        }else if (snapCounter - importAtSnap == 5 * snapPerYr){
-                             timePt = 2;
-                        }else if (snapCounter - importAtSnap == 10 * snapPerYr){
-                             timePt = 3;
-                        }                                                
-                       
+                        } else if (snapCounter - importAtSnap == 5 * snapPerYr) {
+                            timePt = 2;
+                        } else if (snapCounter - importAtSnap == 10 * snapPerYr) {
+                            timePt = 3;
+                        }
+
                         if (timePt >= 0) {
                             prevalenceByStrainAt[simCounter][timePt][0] = entry[snapCounter][PREVAL_ALL][0];
                             prevalenceByStrainAt[simCounter][timePt][1] = entry[snapCounter][PREVAL_ALL][1];
