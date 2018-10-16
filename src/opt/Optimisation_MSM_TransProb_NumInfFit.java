@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 import optimisation.AbstractParameterOptimiser;
 import optimisation.AbstractResidualFunc;
 import optimisation.NelderMeadOptimiser;
-import optimisation.ParameterConstraintTransform;
+import transform.ParameterConstraintTransform;
 import population.MSMPopulation;
 import population.person.RelationshipPerson_MSM;
 import static sim.SimulationInterface.PROP_BURNIN;
@@ -97,16 +97,23 @@ public class Optimisation_MSM_TransProb_NumInfFit {
                 lnNum++;
             }
             constraints = new ParameterConstraintTransform[lnNum];
+            
             lnNum = 0;
             BufferedReader constraintReader2 = new BufferedReader(new FileReader(costrainFile));
 
             while ((line = constraintReader2.readLine()) != null) {
                 String[] ent = line.split(",");
-                constraints[lnNum] = new ParameterConstraintTransform(new double[]{
+                /*
+                constraints[lnNum] = new transform.ParameterConstraintTransformSineCurve(new double[]{
                     Double.parseDouble(ent[0]), Double.parseDouble(ent[1])});
+                */
+                constraints[lnNum] = new transform.ParameterConstraintTransformLinear(new double[]{
+                    Double.parseDouble(ent[0]), Double.parseDouble(ent[1])});
+                
                 lnNum++;
             }
         }
+        //</editor-fold>
         //</editor-fold>
 
         optimisationFunc = new Opt_ResidualFunc(baseDir);
