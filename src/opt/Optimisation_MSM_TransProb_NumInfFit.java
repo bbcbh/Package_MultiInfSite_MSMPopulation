@@ -32,12 +32,13 @@ import sim.SinglePopRunnable;
  * Perform parameter optimisation of MSM model base on number of infection
  *
  * @author Ben Hui
- * @version 20181012
+ * @version 20181018
  *
  * <pre>
  * History:
  * 20181011 - Renaming of class and add method for 7 tranmission parameter
  * 20181012 - Add dummy PropertyChangeSupport to reduce textual output
+ * 20181018 - Add target weight option 
  * </pre>
  *
  */
@@ -51,6 +52,7 @@ public class Optimisation_MSM_TransProb_NumInfFit {
 
     public File baseDir = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Optimsation");
     public double[] NUM_INF_TARGET = new double[]{100, 460, 400};
+    public double[] FITTING_WEIGHT = new double[]{1,1,1};
     public int NUM_SIM = 1;
     public long BASESEED = 6109418859537162492l;
     public int NUM_THREAD = Runtime.getRuntime().availableProcessors();
@@ -64,9 +66,16 @@ public class Optimisation_MSM_TransProb_NumInfFit {
             // Target
             if (!arg[1].isEmpty()) {
                 String[] val = arg[1].split(",");
-                for (int i = 0; i < val.length; i++) {
+                for (int i = 0; i < NUM_INF_TARGET.length; i++) {
                     NUM_INF_TARGET[i] = Double.parseDouble(val[i]);
                 }
+                if(val.length > NUM_INF_TARGET.length){
+                    for (int i = 0; i < FITTING_WEIGHT.length; i++) {
+                        FITTING_WEIGHT[i] = Double.parseDouble(val[NUM_INF_TARGET.length + i]);
+                    }
+                    
+                }
+                
             }
             // Number of sim 
             if (!arg[2].isEmpty()) {
@@ -103,18 +112,21 @@ public class Optimisation_MSM_TransProb_NumInfFit {
 
             while ((line = constraintReader2.readLine()) != null) {
                 String[] ent = line.split(",");
-                /*
+                
                 constraints[lnNum] = new transform.ParameterConstraintTransformSineCurve(new double[]{
                     Double.parseDouble(ent[0]), Double.parseDouble(ent[1])});
-                */
+                
+                
+                /*
                 constraints[lnNum] = new transform.ParameterConstraintTransformLinear(new double[]{
                     Double.parseDouble(ent[0]), Double.parseDouble(ent[1])});
+                */
                 
                 lnNum++;
             }
         }
         //</editor-fold>
-        //</editor-fold>
+  
 
         optimisationFunc = new Opt_ResidualFunc(baseDir);
 
@@ -143,6 +155,9 @@ public class Optimisation_MSM_TransProb_NumInfFit {
 
             System.out.println("P0 from " + preP0.getAbsolutePath() + " imported");
         }
+        
+        System.out.println("Fitting target = " + Arrays.toString(NUM_INF_TARGET));
+        System.out.println("Weighting = " + Arrays.toString(FITTING_WEIGHT));
 
         //<editor-fold defaultstate="collapsed" desc="Optimisation process">    
         double[] r0 = null;
@@ -369,7 +384,7 @@ public class Optimisation_MSM_TransProb_NumInfFit {
 
             for (int r = 0; r < runnable.length; r++) {
                 for (int i = 0; i < res.length; i++) {
-                    res[i] += (runInfected[r][i] - NUM_INF_TARGET[i]) / runnable.length;
+                    res[i] += ((runInfected[r][i] - NUM_INF_TARGET[i]) * FITTING_WEIGHT[i]) / runnable.length;
                 }
             }
 
