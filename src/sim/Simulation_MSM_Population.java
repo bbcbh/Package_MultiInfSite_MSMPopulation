@@ -590,7 +590,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
             objS[i] = AppendableObjOutstream.generateFromFile(f);
         }
 
-        PrintWriter pri = new PrintWriter(new FileWriter(new File(baseDir, FILE_NAMES_CSV[FILE_END_NUM_INF_PERSON_CSV])));
+        PrintWriter pri = new PrintWriter(new FileWriter(new File(baseDir, FILE_NAMES_CSV[FILE_END_NUM_INF_PERSON_CSV]),true));
 
         for (SinglePopRunnable runnable : runnableCollection) {
             if (runnable != null) {
