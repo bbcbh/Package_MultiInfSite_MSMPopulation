@@ -26,7 +26,7 @@ import population.person.MultiSiteMultiStrainPersonInterface;
 
 /**
  * @author Ben Hui
- * @version 20181011
+ * @version 20190110
  *
  * <p>
  * History:</p>
@@ -71,12 +71,15 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * <p>
  * 20180528 - Add multiple strain support </p>
  * <p>
- * 20180920 - Add support for tranmission for kissing, slight change to the output definition of performAct to include tranmission from all site * 
+ * 20180920 - Add support for tranmission for kissing, slight change to the output definition of performAct to include tranmission from all site
+ *
  * </p>
  * <p>
- * 20181011 - Add support for alterative format for freq. of act based on number of partner in last 12 months  
+ * 20181011 - Add support for alterative format for freq. of act based on number of partner in last 12 months
  * </p>
- *
+ * <p>
+ * 20190110 - Change the definition of symtomatic infection to self-sought treatment.
+ * </p>
  *
  */
 public class MSMPopulation extends AbstractRegCasRelMapPopulation {
@@ -642,9 +645,14 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         boolean justDevelopedSym = false;
         double symDur = Double.POSITIVE_INFINITY;
 
+        boolean symSubside = false;
+
         for (int i = 0; i < preInfectStat.length; i++) {
             justDevelopedSym |= preInfectStat[i] != GonorrhoeaSiteInfection.STATUS_SYM
                     && afterInfectStat[i] == GonorrhoeaSiteInfection.STATUS_SYM;
+
+            symSubside |= preInfectStat[i] == GonorrhoeaSiteInfection.STATUS_SYM
+                    && afterInfectStat[i] != GonorrhoeaSiteInfection.STATUS_SYM;
 
             if (justDevelopedSym) {
                 symDur = Math.min(symDur, person.getTimeUntilNextStage(i));
@@ -665,6 +673,10 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                     }
                 }
             }
+        }
+
+        if (symSubside) {
+            treatPerson((RelationshipPerson_MSM) person);
         }
 
         return infList;
@@ -850,7 +862,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                                         tranSucProb = 0;
                                     }
 
-                                    boolean g2NG = tranSucProb>0;
+                                    boolean g2NG = tranSucProb > 0;
                                     if (g2NG && tranSucProb < 1) {
                                         g2NG = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_G]).getRNG().nextDouble()
                                                 < tranSucProb;
@@ -886,9 +898,9 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                                         tranSucProb = 0;
                                     }
 
-                                    boolean nG2G = tranSucProb>0;
+                                    boolean nG2G = tranSucProb > 0;
 
-                                    if (nG2G && tranSucProb < 1)  {
+                                    if (nG2G && tranSucProb < 1) {
                                         nG2G = ((GonorrhoeaSiteInfection) getInfList()[nonGTarget]).getRNG().nextDouble()
                                                 < tranSucProb;
                                     }
@@ -944,30 +956,24 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         }
 
         actFreq = Arrays.copyOf(actFreq, actFreq.length); // So it won't change the global value 
-        
-        if(actFreq.length > 0 && actFreq[0][0] == -1){
+
+        if (actFreq.length > 0 && actFreq[0][0] == -1) {
             // For Alterative format: {[-1, number partners limit], 
             //                      [prob of anal under limit, prob of anal over limit],
             //                      [prob of oral under limit, prob of oral over limit]... }                   
-            
-            
-            float[][] actFreqAlt = new float[actFreq.length -1][2];                         
+
+            float[][] actFreqAlt = new float[actFreq.length - 1][2];
             for (AbstractIndividualInterface pair1 : pair) {
                 RelationshipPerson_MSM person = (RelationshipPerson_MSM) pair1;
-                int numCasualPast6Months = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_NUM_CASUAL_IN_LAST_6_MONTHS))).intValue();                
-                for(int a = 0; a < actFreqAlt.length; a++){                    
-                    actFreqAlt[a][0] +=  actFreq[a+1][(numCasualPast6Months <= actFreq[0][1])?0:1] /2;
-                    actFreqAlt[a][1] =  actFreqAlt[a][0];                    
-                }                                                               
-            }                                                
-            
+                int numCasualPast6Months = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_NUM_CASUAL_IN_LAST_6_MONTHS))).intValue();
+                for (int a = 0; a < actFreqAlt.length; a++) {
+                    actFreqAlt[a][0] += actFreq[a + 1][(numCasualPast6Months <= actFreq[0][1]) ? 0 : 1] / 2;
+                    actFreqAlt[a][1] = actFreqAlt[a][0];
+                }
+            }
+
             actFreq = actFreqAlt;
         }
-        
-        
-        
-        
-        
 
         relTotal[mapType]++;
         relLen[mapType] += dur;
@@ -1062,12 +1068,16 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
             double[] var;
             switch (i) {
                 case RelationshipPerson_MSM.SITE_G:
-                    // Assume all have sym
+                    // Assume all have sym i.e treated
                     siteParam[GonorrhoeaSiteInfection.DIST_SYM_INDEX] = new double[]{1, 0};
                     // Kit email 20130911 for urethal
                     siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new double[]{2.5714, 2.24343};
                     var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX]);
                     distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new GammaDistribution(infRNG, var[0], 1 / var[1]);
+                    // Assume duration same as Garnett 1999, Brunham 1991, SD same as Johnson 2010                                        
+                    siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new double[]{185, 5 * 7};
+                    var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX]);
+                    distributions[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new GammaDistribution(infRNG, var[0], 1 / var[1]);
                     // Transmission from G - 0.5 Chen 2010
                     siteParam[GonorrhoeaSiteInfection.DIST_TRANS_PROB_INDEX] = new double[]{0.5, 0};
                     break;
