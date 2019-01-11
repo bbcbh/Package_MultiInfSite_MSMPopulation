@@ -642,11 +642,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
         }
         pri.close();
     }
-    
+
     public void decodeSnapCountFile() throws FileNotFoundException, IOException, ClassNotFoundException {
         decodeSnapCountFile(baseDir, propVal);
     }
-    
 
     public static void decodeSnapCountFile(File baseDir, Object[] propVal) throws FileNotFoundException, IOException, ClassNotFoundException {
         File snapCountFile = new File(baseDir, FILE_NAMES_OBJ[FILE_SNAPCOUNTS]);
@@ -755,6 +754,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
     }
 
     public static void decodeExportedPopulationFiles(File baseDir) throws IOException, ClassNotFoundException {
+        decodeExportedPopulationFiles(baseDir, new int[]{0, Integer.MAX_VALUE});
+    }
+
+    public static void decodeExportedPopulationFiles(File baseDir, int[] range) throws IOException, ClassNotFoundException {
         final Pattern Pattern_importFile = Pattern.compile("pop_(\\d+).zip");
         File[] exportFolders = baseDir.listFiles(new FileFilter() {
             @Override
@@ -795,113 +798,132 @@ public class Simulation_MSM_Population implements SimulationInterface {
             final int OFFSET_S10 = OFFSET_S01 + 3;
             final int OFFSET_S11 = OFFSET_S10 + 3;
 
-            PrintWriter pri_numPartnerLast6Months = new PrintWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]));
-            pri_numPartnerLast6Months.println("Sim, Id, Age, Num casual partners in last 6 months");
+            boolean[] prePrintExist = new boolean[FILE_NAMES_CSV.length];
+            
+            for(int i = 0; i < prePrintExist.length; i++){
+                prePrintExist[i] = new File(exportDir, FILE_NAMES_CSV[i]).exists();
+            }            
+            
+            PrintWriter pri_numPartnerLast6Months = new PrintWriter(
+                    new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]), true));
 
-            PrintWriter pri_inf_stat = new PrintWriter(new File(exportDir, FILE_NAMES_CSV[FILE_INFECTION_STAT_CSV])); 
+            if (!prePrintExist[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]) {
+                pri_numPartnerLast6Months.println("Sim, Id, Age, Num casual partners in last 6 months");
+            }
+
+            PrintWriter pri_inf_stat = new PrintWriter(
+                    new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_INFECTION_STAT_CSV]), true));
             String inf_stat_header = "Sim,Total,Any,G,A,R,Any_10,G01,A01,R01,G10,A10,R10,G11,A11,R11";
-                
-                
-            pri_inf_stat.println(inf_stat_header);
+
+            if (!prePrintExist[FILE_INFECTION_STAT_CSV]) {
+                pri_inf_stat.println(inf_stat_header);
+            }
+
             for (File popFile : popZip) {
                 Matcher m = Pattern_importFile.matcher(popFile.getName());
                 m.find();
                 int popId = new Integer(m.group(1));
-                int[] count = new int[inf_stat_header.split(",").length];
-                count[0] = popId;
 
-                File temp = FileZipper.unzipFile(popFile, exportDir);
-                MSMPopulation pop;
-                try (ObjectInputStream inStream = new ObjectInputStream(new FileInputStream(temp))) {
-                    pop = MSMPopulation.importMSMPopulation(inStream);
-                }
-                temp.delete();
+                if (!prePrintExist[FILE_INFECTION_STAT_CSV] 
+                        || popId >= range[0] && popId < range[1]) {
 
-                if (pop != null) {
-                    count[1] = pop.getPop().length;
-                    for (AbstractIndividualInterface p : pop.getPop()) {
+                    int[] count = new int[inf_stat_header.split(",").length];
+                    count[0] = popId;
 
-                        StringBuilder numPartnStr = new StringBuilder();
-
-                        numPartnStr.append(popId);
-                        numPartnStr.append(',');                        
-                        numPartnStr.append(p.getId());
-                        numPartnStr.append(',');
-                        numPartnStr.append((int) p.getAge());
-                        numPartnStr.append(',');
-                        
-                        int[] casualRec = ((RelationshipPerson_MSM) p).getCasualRecord();
-                        int numCasual = 0 ;
-                        
-                        for(int i = 0; i < casualRec.length; i++){
-                            numCasual += (casualRec[i] != 0) ? 1 :0;
-                        }
-                        
-                        numPartnStr.append(numCasual);
-                        
-                        pri_numPartnerLast6Months.println(numPartnStr);                                                
-
-                        int[] infStat = p.getInfectionStatus();
-                        int[] strainStat = null;
-                        if (p instanceof MultiSiteMultiStrainPersonInterface) {
-                            strainStat = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite();
-                        }
-
-                        boolean hasInf = false;
-                        boolean hasNewStrain = false;
-                        for (int site = 0; site < infStat.length; site++) {
-                            if (infStat[site] != AbstractIndividualInterface.INFECT_S) {
-                                count[OFFSET_SITE + site]++;
-                                hasInf = true;
-                                if (strainStat != null && strainStat[site] > 0) {
-                                    hasNewStrain |= (strainStat[site] == 0b10 || strainStat[site] == 0b11);
-                                }
-                            }
-                            if (strainStat != null && strainStat[site] > 0) {
-                                switch (strainStat[site]) {
-                                    case 0b01:
-                                        count[OFFSET_S01 + site]++;
-                                        break;
-                                    case 0b10:
-                                        count[OFFSET_S10 + site]++;
-                                        break;
-                                    case 0b11:
-                                        count[OFFSET_S11 + site]++;
-                                        break;
-                                    default:
-                                        System.err.println("Simulation_MSM_Population.decodeExportedPopulationFiles(): strain stat 0b"
-                                                + Integer.toBinaryString(strainStat[site]) + " not supported");
-                                }
-                            }
-                        }
-                        if (hasInf) {
-                            count[OFFSET_ANY]++;
-                        }
-
-                        if (hasNewStrain) {
-                            count[OFFSET_ANY_10]++;
-                        }
+                    File temp = FileZipper.unzipFile(popFile, exportDir);
+                    MSMPopulation pop;
+                    try (ObjectInputStream inStream = new ObjectInputStream(new FileInputStream(temp))) {
+                        pop = MSMPopulation.importMSMPopulation(inStream);
                     }
-                    
+                    temp.delete();
+
+                    if (pop != null) {
+                        count[1] = pop.getPop().length;
+                        for (AbstractIndividualInterface p : pop.getPop()) {
+
+                            StringBuilder numPartnStr = new StringBuilder();
+
+                            numPartnStr.append(popId);
+                            numPartnStr.append(',');
+                            numPartnStr.append(p.getId());
+                            numPartnStr.append(',');
+                            numPartnStr.append((int) p.getAge());
+                            numPartnStr.append(',');
+
+                            int[] casualRec = ((RelationshipPerson_MSM) p).getCasualRecord();
+                            int numCasual = 0;
+
+                            for (int i = 0; i < casualRec.length; i++) {
+                                numCasual += (casualRec[i] != 0) ? 1 : 0;
+                            }
+
+                            numPartnStr.append(numCasual);
+
+                            pri_numPartnerLast6Months.println(numPartnStr);
+
+                            int[] infStat = p.getInfectionStatus();
+                            int[] strainStat = null;
+                            if (p instanceof MultiSiteMultiStrainPersonInterface) {
+                                strainStat = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite();
+                            }
+
+                            boolean hasInf = false;
+                            boolean hasNewStrain = false;
+                            for (int site = 0; site < infStat.length; site++) {
+                                if (infStat[site] != AbstractIndividualInterface.INFECT_S) {
+                                    count[OFFSET_SITE + site]++;
+                                    hasInf = true;
+                                    if (strainStat != null && strainStat[site] > 0) {
+                                        hasNewStrain |= (strainStat[site] == 0b10 || strainStat[site] == 0b11);
+                                    }
+                                }
+                                if (strainStat != null && strainStat[site] > 0) {
+                                    switch (strainStat[site]) {
+                                        case 0b01:
+                                            count[OFFSET_S01 + site]++;
+                                            break;
+                                        case 0b10:
+                                            count[OFFSET_S10 + site]++;
+                                            break;
+                                        case 0b11:
+                                            count[OFFSET_S11 + site]++;
+                                            break;
+                                        default:
+                                            System.err.println("Simulation_MSM_Population.decodeExportedPopulationFiles(): strain stat 0b"
+                                                    + Integer.toBinaryString(strainStat[site]) + " not supported");
+                                    }
+                                }
+                            }
+                            if (hasInf) {
+                                count[OFFSET_ANY]++;
+                            }
+
+                            if (hasNewStrain) {
+                                count[OFFSET_ANY_10]++;
+                            }
+                        }
+
+                    }
+
+                    pri_inf_stat.print(popId);
+                    for (int c = 1; c < count.length; c++) {
+                        pri_inf_stat.print(',');
+                        pri_inf_stat.print(count[c]);
+
+                    }
+                    pri_inf_stat.println();
+                    pri_inf_stat.flush();
+
+                    pri_numPartnerLast6Months.flush();
+
+                    System.out.println("Analysing pop file " + popFile.getName() + " completed.");
+                }else{
+                    System.out.println("Analysing pop file " + popFile.getName() + " skipped.");
                 }
 
-                pri_inf_stat.print(popId);
-                for (int c = 1; c < count.length; c++) {
-                    pri_inf_stat.print(',');
-                    pri_inf_stat.print(count[c]);
-
-                }
-                pri_inf_stat.println();
-                pri_inf_stat.flush();
-                
-                pri_numPartnerLast6Months.flush();
-                
-                
-                System.out.println("Analysing pop file " + popFile.getName() + " completed.");
+                pri_inf_stat.close();
+                pri_numPartnerLast6Months.close();
             }
-
-            pri_inf_stat.close();
-            pri_numPartnerLast6Months.close();
 
         }
 

@@ -26,7 +26,7 @@ import population.person.MultiSiteMultiStrainPersonInterface;
 
 /**
  * @author Ben Hui
- * @version 20190110
+ * @version 20190111
  *
  * <p>
  * History:</p>
@@ -78,7 +78,10 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * 20181011 - Add support for alterative format for freq. of act based on number of partner in last 12 months
  * </p>
  * <p>
- * 20190110 - Change the definition of symtomatic infection to self-sought treatment.
+ * 20190110 - Change the definition of symptomatic infection to self-sought treatment.
+ * </p>
+ *  <p>
+ * 20190111 - Adding input for % symptomatic by site.
  * </p>
  *
  */
@@ -112,7 +115,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int MSM_SCREENING_SETTING_GENERAL = MSM_INSERTIVE_RECEPTIVE_ACCUM_DIST + 1;
     public static final int MSM_SCREENING_SETTING_TARGETED = MSM_SCREENING_SETTING_GENERAL + 1;
     public static final int MSM_TREATMENT_EFFICIENCY = MSM_SCREENING_SETTING_TARGETED + 1;
-    public static final int LENGTH_FIELDS_MSM_POP = MSM_TREATMENT_EFFICIENCY + 1;
+    public static final int MSM_SYM_TREATMENT_PROB = MSM_TREATMENT_EFFICIENCY + 1;
+    public static final int LENGTH_FIELDS_MSM_POP = MSM_SYM_TREATMENT_PROB + 1;
     public static final Object[] DEFAULT_MSM_FIELDS = {
         // Min/max for anal and oral sex for reg (per day) and causal relationship (per partnership), from 
         // Crawford et al. Number of risk acts by relationship status
@@ -170,7 +174,13 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         new float[]{Float.POSITIVE_INFINITY, 0, 0},
         // Treatment efficiency by site
         // Format: float[site]{eff_for_s1, eff_for_s2 ...}
-        new float[][]{{1, 1, 1}},};
+        new float[][]{{1, 1, 1}},
+        // Probablility of syptomatic/sought treatment at each site
+        // Urethral: Assumption
+        // Anal : Bissessor 2011: 7 out 47 of has proctitis
+        // Phary : Assumption
+        new float[]{1, 7/4.7f, 0},    
+    };
     public static final int[] AGE_RANGE = {(int) (16 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT),
         (int) (80 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT)
     };
@@ -1047,6 +1057,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public void initialiseInfection(long seed) {
         AbstractInfection[] infList = new AbstractInfection[3]; // 3 sites        
         random.RandomGenerator infRNG;
+        float[] probSymBySite  = (float[]) getFields()[MSM_SYM_TREATMENT_PROB];
+        
         if (seed != 0) {
             getFields()[FIELDS_INF_RNG] = new random.RandomGenerator[infList.length];
             infRNG = new MersenneTwisterRandomGenerator(seed);
@@ -1065,11 +1077,11 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
             siteParam[GonorrhoeaSiteInfection.DIST_EXPOSED_DUR_INDEX] = new double[]{4, 0};
             siteParam[GonorrhoeaSiteInfection.DIST_IMMUNE_DUR_INDEX] = new double[]{7, 0};
             siteParam[GonorrhoeaSiteInfection.DIST_SUS_PROB_INDEX] = new double[]{1, 0};
-            double[] var;
+            double[] var;                        
             switch (i) {
                 case RelationshipPerson_MSM.SITE_G:
                     // Assume all have sym i.e treated
-                    siteParam[GonorrhoeaSiteInfection.DIST_SYM_INDEX] = new double[]{1, 0};
+                    siteParam[GonorrhoeaSiteInfection.DIST_SYM_INDEX] = new double[]{probSymBySite[i], 0};
                     // Kit email 20130911 for urethal
                     siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new double[]{2.5714, 2.24343};
                     var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX]);
@@ -1083,7 +1095,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                     break;
                 case RelationshipPerson_MSM.SITE_A:
                     // Anal : Bissessor 2011: 7 out 47 of has proctitis
-                    siteParam[GonorrhoeaSiteInfection.DIST_SYM_INDEX] = new double[]{7.0 / 47, 0};
+                    siteParam[GonorrhoeaSiteInfection.DIST_SYM_INDEX] = new double[]{probSymBySite[i], 0};
                     // Assume same as Urethal
                     siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX] = new double[]{2.5714, 2.24343};
                     var = StaticMethods.generatedGammaParam(siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_SYM_INDEX]);
@@ -1099,7 +1111,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                     break;
                 case RelationshipPerson_MSM.SITE_R:
                     // Assume none have sym
-                    siteParam[GonorrhoeaSiteInfection.DIST_SYM_INDEX] = new double[]{0, 0};
+                    siteParam[GonorrhoeaSiteInfection.DIST_SYM_INDEX] = new double[]{probSymBySite[i], 0};
                     // Assume same as Johnson 2010
                     //siteParam[GonorrhoeaSiteInfection.DIST_INFECT_DUR_ASY_INDEX] = new double[]{15 * 7, 5 * 7};
                     // From C. Fairley email at 20131121, Fairley et al 2011
