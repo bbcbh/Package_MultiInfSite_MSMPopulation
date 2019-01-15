@@ -22,13 +22,14 @@ import util.PersonClassifier;
 import util.StaticMethods;
 import infection.MultiStrainInfectionInterface;
 import population.person.MultiSiteMultiStrainPersonInterface;
+import population.person.RelationshipPerson_MSM;
 
 /**
  *
  * @author Ben Hui
- * @version 20181011
+ * @version 20190116
  *
- * History:  <pre> 
+ * History:  <pre>
  * 20150313
  *  - Add infection history support
  * 20150523
@@ -37,7 +38,8 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  *  - Simplfy strain intro add method.
  * 20181012
  *  - Remove export population if basedir is null
- *
+ * 20190116
+ *  - Add support for exporting indivdual behavior
  *
  * </pre>
  *
@@ -68,6 +70,7 @@ public class SinglePopRunnable implements Runnable {
     private final HashMap<Integer, Integer> infectionPreExposeMap = new HashMap(); // infection_id, days
 
     public static final String EXPORT_PREFIX = "export_";
+    public static final String EXPORT_INDIV_PREFIX = "IndivdualSnap_";
     private int[] exportAt = null;
     private int exportAtPt = 0;
     private boolean printPrevalence = false;
@@ -303,6 +306,66 @@ public class SinglePopRunnable implements Runnable {
                         ex.printStackTrace(System.err);
                         showStrStatus("Error in exporting pop file " + exportPopFileZip.getAbsolutePath());
 
+                    }
+
+                    // Export indivdual snapshot 
+                    File behaviourFile = new File(exportPopFileDir,
+                            EXPORT_INDIV_PREFIX + getId() + ".csv");
+
+                    try {
+
+                        PrintWriter wri = new PrintWriter(new java.io.FileWriter(behaviourFile));
+
+                        StringBuilder header = new StringBuilder("Id,Age,BehavType,# Reg,# Cas");
+
+                        for (int p = 0; p < getPopulation().getPop().length; p++) {
+                            RelationshipPerson_MSM person = (RelationshipPerson_MSM) getPopulation().getPop()[p];
+                            boolean inReg
+                                    = getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].containsVertex(person.getId())
+                                    && getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].degreeOf(person.getId()) > 0;
+
+                            int[] casualRec = person.getCasualRecord();
+                            int numCasual = 0;
+                            for (int i = 0; i < casualRec.length; i++) {
+                                numCasual += (casualRec[i] != 0) ? 1 : 0;
+                            }
+
+                            int[] infStat = person.getInfectionStatus();
+                            int[] strainStat = person.getCurrentStrainsAtSite();
+
+                            if (p == 0) {
+                                for (int i = 0; i < infStat.length; i++) {
+                                    header.append(',');
+                                    header.append("Inf Stat_" + i);
+                                    header.append(',');
+                                    header.append("Strain Stat_" + i);
+                                }
+                                wri.println(header.toString());
+                            }
+
+                            StringBuilder numPartnStr = new StringBuilder();
+                            numPartnStr.append(person.getId());
+                            numPartnStr.append(',');
+                            numPartnStr.append((int) person.getAge());
+                            numPartnStr.append(',');                            
+                            numPartnStr.append(((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue());                            
+                            numPartnStr.append(',');
+                            numPartnStr.append(inReg ? 1 : 0);
+                            numPartnStr.append(',');
+                            numPartnStr.append(numCasual);
+                            for (int i = 0; i < infStat.length; i++) {
+                                numPartnStr.append(',');
+                                numPartnStr.append(infStat[i]);
+                                numPartnStr.append(',');
+                                numPartnStr.append(strainStat[i]);
+                            }
+                            wri.println(numPartnStr.toString());                            
+                        }
+                        
+                        wri.close();
+
+                    } catch (IOException ex) {
+                        ex.printStackTrace(System.err);
                     }
 
                     if (!forced) {

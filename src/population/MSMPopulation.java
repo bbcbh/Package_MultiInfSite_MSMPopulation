@@ -26,7 +26,7 @@ import population.person.MultiSiteMultiStrainPersonInterface;
 
 /**
  * @author Ben Hui
- * @version 20190111
+ * @version 20190116
  *
  * <p>
  * History:</p>
@@ -80,10 +80,12 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * <p>
  * 20190110 - Change the definition of symptomatic infection to self-sought treatment.
  * </p>
- *  <p>
+ * <p>
  * 20190111 - Adding input for % symptomatic by site.
  * </p>
- *
+ * <p>
+ * 20190115 - Add support for population based distribution for casual partnership
+ * </p>
  */
 public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
@@ -116,7 +118,9 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int MSM_SCREENING_SETTING_TARGETED = MSM_SCREENING_SETTING_GENERAL + 1;
     public static final int MSM_TREATMENT_EFFICIENCY = MSM_SCREENING_SETTING_TARGETED + 1;
     public static final int MSM_SYM_TREATMENT_PROB = MSM_TREATMENT_EFFICIENCY + 1;
-    public static final int LENGTH_FIELDS_MSM_POP = MSM_SYM_TREATMENT_PROB + 1;
+    public static final int MSM_USE_GLOBAL_CASUAL_LIMIT = MSM_SYM_TREATMENT_PROB + 1;
+    public static final int LENGTH_FIELDS_MSM_POP = MSM_USE_GLOBAL_CASUAL_LIMIT + 1;
+
     public static final Object[] DEFAULT_MSM_FIELDS = {
         // Min/max for anal and oral sex for reg (per day) and causal relationship (per partnership), from 
         // Crawford et al. Number of risk acts by relationship status
@@ -179,8 +183,9 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         // Urethral: Assumption
         // Anal : Bissessor 2011: 7 out 47 of has proctitis
         // Phary : Assumption
-        new float[]{1, 7/4.7f, 0},    
-    };
+        new float[]{1, 7 / 4.7f, 0},
+        // Global casual limit        
+        true,};
     public static final int[] AGE_RANGE = {(int) (16 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT),
         (int) (80 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT)
     };
@@ -189,6 +194,10 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
     // Pop Snap Count (Acumulative)    
     private transient final int[] cumulativeIncidencesBySites = new int[3]; // 3 Sites, in accordance to Relationship_MSM.Site_X
+
+    // Global casual limit    
+    private transient float[] CASUAL_PARTNER_PROB;
+
     // Screening (General)
     private transient int[] screeningPersonByIndex = null; // Length of total screened
     private transient int[] screeningSite = null; // Length of total screened
@@ -267,6 +276,22 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         float[] casualPartProb = (float[]) getFields()[MSM_CAS_PART_PROB]; //{0.26f, 0.21f, 0.16f, 0.30f, 0.07f};
         int[][] casualPartLimit = (int[][]) getFields()[MSM_CAS_PART_SPREAD]; //{{1, 3}, {4, 10}, {11, 20}, {21, 100}, {101, 120}};
         float[] casualPartProbAccum = StaticMethods.accumulativeArray(casualPartProb);
+
+        CASUAL_PARTNER_PROB = new float[casualPartLimit[casualPartLimit.length - 1][1] + 1];
+
+        for (int i = 0; i < casualPartLimit.length; i++) {
+            int[] limit = Arrays.copyOf(casualPartLimit[i], casualPartLimit[i].length);
+            if (i == 0) {
+                limit[0] = 0;
+            }
+            if (i + 1 < casualPartLimit.length && limit[1] == casualPartLimit[i + 1][0]) {
+                limit[1]--;
+            }
+
+            for (int k = limit[0]; k <= limit[1]; k++) {
+                CASUAL_PARTNER_PROB[k] = casualPartProb[i] / (limit[1] - limit[0] + 1);
+            }
+        }
 
         setPop(new RelationshipPerson_MSM[NUM_IN_POP]);
         setRelMap(new RelationshipMap[]{
@@ -417,6 +442,13 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         HashSet<RelationshipPerson_MSM> toBeRemoved = new HashSet<>();
 
+        // Casual partnership stat 
+        boolean useGlobalPopLimit = (Boolean) getFields()[MSM_USE_GLOBAL_CASUAL_LIMIT];
+        int[] casualPart_Stat = new int[CASUAL_PARTNER_PROB.length];
+        RelationshipPerson_MSM[][] casualPart_candidateCollection = new RelationshipPerson_MSM[CASUAL_PARTNER_PROB.length][getPop().length];
+        int[] casualPart_candidateCollectionPt = new int[CASUAL_PARTNER_PROB.length];
+        int casualPart_Total = 0;
+
         for (int p = 0; p < getPop().length; p++) {
             RelationshipPerson_MSM person = (RelationshipPerson_MSM) getPop()[p];
             incrementPersonStat(person, deltaT);
@@ -437,8 +469,29 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 getFields()[FIELDS_NEXT_ID] = new Integer(nextId + 1);
             }
 
+            int behaviour = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+
+            if (useGlobalPopLimit) {
+                if (behaviour != RelationshipPerson_MSM.BEHAV_REG_ONLY) {
+                    int[] casualRec = person.getCasualRecord();
+                    int numCasual = 0;
+                    for (int i = 0; i < casualRec.length; i++) {
+                        numCasual += (casualRec[i] != 0) ? 1 : 0;
+                    }
+
+                    numCasual = Math.min(numCasual, casualPart_Stat.length - 1);
+                    casualPart_Stat[numCasual]++;
+
+                    if (person.getTimeUntilNextRelationship() < 0) {
+                        casualPart_candidateCollection[numCasual][casualPart_candidateCollectionPt[numCasual]] = person;
+                        casualPart_candidateCollectionPt[numCasual]++;
+                    }
+                    casualPart_Total++;
+                }
+            }
+
             if (person.getTimeUntilNextRelationship() < 0) {
-                int behaviour = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+
                 if (behaviour != RelationshipPerson_MSM.BEHAV_CAS_ONLY) { // i.e. can have regular partnership                
                     if (!getRelMap()[MAPPING_REG].containsVertex(person.getId())
                             || getRelMap()[MAPPING_REG].degreeOf(person.getId()) < 1) {
@@ -448,7 +501,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                         getRelMap()[MAPPING_REG].removeAvailablePerson(person);
                     }
                 }
-                if (behaviour != RelationshipPerson_MSM.BEHAV_REG_ONLY) { // i.e. can have casual 
+                if (!useGlobalPopLimit && behaviour != RelationshipPerson_MSM.BEHAV_REG_ONLY) { // i.e. can have casual 
                     boolean seekingCasual = person.getParameter(
                             person.indexToParamName(RelationshipPerson_MSM.PARAM_NUM_CASUAL_IN_LAST_6_MONTHS)).compareTo(
                             person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_MAX_PARTNER))) < 0;
@@ -501,6 +554,80 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
             snapshotCount(person);
         }
+        
+        if (useGlobalPopLimit) {
+            int[] casualPart_Target = new int[CASUAL_PARTNER_PROB.length];
+            int targetSum = 0;
+            for (int i = 0; i < casualPart_Target.length; i++) {
+                casualPart_Target[i] = (int) Math.round(CASUAL_PARTNER_PROB[i] * casualPart_Total);
+                targetSum += casualPart_Target[i];
+            }
+            // Remove randomly until exact match
+            while (targetSum != casualPart_Total) {
+                if (targetSum > casualPart_Total) {
+                    casualPart_Target[getRNG().nextInt(casualPart_Target.length)]--;
+                    targetSum--;
+                } else {
+                    casualPart_Target[getRNG().nextInt(casualPart_Target.length)]++;
+                    targetSum++;
+                }
+            }
+
+            int diff;                        
+            //System.out.println(getGlobalTime() + ":" + Arrays.toString(casualPart_Stat));                        
+            for (int g = 0; g < casualPart_Stat.length; g++) {
+                diff = Math.max(casualPart_Stat[g] - casualPart_Target[g], 0);                               
+                RelationshipPerson_MSM[] changeCasualBehaviorCandidates;
+
+                changeCasualBehaviorCandidates = new RelationshipPerson_MSM[Math.min(diff, casualPart_candidateCollectionPt[g])];
+                int cPt = 0;
+                for (int c = 0; c < casualPart_candidateCollectionPt[g]; c++) {
+                    if (getRNG().nextInt(casualPart_candidateCollectionPt[g] - c) < diff) {
+                        changeCasualBehaviorCandidates[cPt] = casualPart_candidateCollection[g][c];
+                        cPt++;
+                        diff--;
+                    } else {
+                        getRelMap()[MAPPING_CAS].removeAvailablePerson(casualPart_candidateCollection[g][c]);
+                    }
+                }
+
+                if (changeCasualBehaviorCandidates.length > 0) {
+
+                    int excessAbove = 0; // Need to form new partnership
+                    int excessBelow = 0;
+
+                    for (int k = 0; k < g; k++) {
+                        excessBelow += Math.max(casualPart_Target[k] - casualPart_Stat[k], 0);
+                    }
+                    for (int k = g + 1; k < casualPart_Target.length; k++) {
+                        excessAbove += Math.max(casualPart_Target[k] - casualPart_Stat[k], 0);
+                    }
+
+                    for (RelationshipPerson_MSM candidate : changeCasualBehaviorCandidates) {
+                        if (getRNG().nextInt(excessAbove + excessBelow) < excessAbove) {                            
+                            // Can seek new partner 
+                            if (getRelMap()[MAPPING_CAS].containsVertex(candidate.getId())
+                                    && getRelMap()[MAPPING_CAS].degreeOf(candidate.getId()) > 1) {
+                                java.util.Set<SingleRelationship> edgeSet = getRelMap()[MAPPING_CAS].edgesOf(candidate.getId());
+                                SingleRelationship[] existingCasual
+                                        = edgeSet.toArray(new SingleRelationship[edgeSet.size()]);
+                                getRelMap()[MAPPING_CAS].removeEdge(existingCasual[0]);
+                            }
+                            getRelMap()[MAPPING_CAS].addAvailablePerson(candidate);
+                            excessAbove--;
+                        } else {
+                            getRelMap()[MAPPING_CAS].removeAvailablePerson(candidate);
+                            candidate.setTimeUntilNextRelationship(getRNG().nextInt(12 * 30));
+                            excessBelow--;
+                        }
+                    }
+
+                }
+
+            }
+
+        }
+        
 
         for (RelationshipPerson_MSM removePerson : toBeRemoved) {
             for (RelationshipMap relMap : getRelMap()) {
@@ -954,7 +1081,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 RelationshipPerson_MSM person = (RelationshipPerson_MSM) pair1;
                 int numCasualPast6Months = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_NUM_CASUAL_IN_LAST_6_MONTHS))).intValue();
                 int maxCasual = person.getMaxPartners();
-                if (maxCasual > 0) {
+                if (maxCasual > 0 && maxCasual > numCasualPast6Months) {
                     dur = Math.min(dur, 6 * 30 / (maxCasual - numCasualPast6Months));
                 } else {
                     dur = 1; // Dummy relationship of 1 day
@@ -1057,8 +1184,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public void initialiseInfection(long seed) {
         AbstractInfection[] infList = new AbstractInfection[3]; // 3 sites        
         random.RandomGenerator infRNG;
-        float[] probSymBySite  = (float[]) getFields()[MSM_SYM_TREATMENT_PROB];
-        
+        float[] probSymBySite = (float[]) getFields()[MSM_SYM_TREATMENT_PROB];
+
         if (seed != 0) {
             getFields()[FIELDS_INF_RNG] = new random.RandomGenerator[infList.length];
             infRNG = new MersenneTwisterRandomGenerator(seed);
@@ -1077,7 +1204,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
             siteParam[GonorrhoeaSiteInfection.DIST_EXPOSED_DUR_INDEX] = new double[]{4, 0};
             siteParam[GonorrhoeaSiteInfection.DIST_IMMUNE_DUR_INDEX] = new double[]{7, 0};
             siteParam[GonorrhoeaSiteInfection.DIST_SUS_PROB_INDEX] = new double[]{1, 0};
-            double[] var;                        
+            double[] var;
             switch (i) {
                 case RelationshipPerson_MSM.SITE_G:
                     // Assume all have sym i.e treated

@@ -26,7 +26,7 @@ public class Test_Simulation_DecodeSnapCount {
         sim.setBaseDir(propFile.toFile().getParentFile());
         sim.loadProperties(prop);       
         //sim.decodeSnapCountFile();
-        Simulation_MSM_Population.decodeExportedPopulationFiles(singleSimFolder, new int[]{424, 1000});
+        Simulation_MSM_Population.decodeExportedPopulationFiles(singleSimFolder);
     }
 
 }
