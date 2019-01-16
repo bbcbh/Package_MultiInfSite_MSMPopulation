@@ -1,11 +1,13 @@
 package sim;
 
 import java.beans.PropertyChangeSupport;
+import java.io.BufferedReader;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -17,7 +19,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -61,7 +62,7 @@ import util.runnable.ExtractFieldRunnable;
  * 20190114
  *     - Add thread support for decoding population zip file.
  * 20190116
- *     - Add support for exported indivdual snapshot
+ *     - Add support for exported individual snapshot
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
@@ -862,11 +863,36 @@ public class Simulation_MSM_Population implements SimulationInterface {
             File decodedSnapFile = new File(exportDir, SinglePopRunnable.EXPORT_INDIV_PREFIX + popId + ".csv");
 
             if (decodedSnapFile.exists()) {
-                
-                
-                
-                
-                
+                BufferedReader csv = new BufferedReader(new FileReader(decodedSnapFile));
+                String line;
+
+                while ((line = csv.readLine()) != null) {
+
+                    // Id,Age,BehavType,# Reg,# Cas,Inf Stat_0,Strain Stat_0,Inf Stat_1,Strain Stat_1,Inf Stat_2,Strain Stat_2
+                    if (!line.startsWith("Id")) {
+                        String[] ent = line.split(",");
+                        int INF_OFFSET = 5;
+                        int numCasual = Integer.parseInt(ent[4]);
+                        int[] infStat = new int[(ent.length - INF_OFFSET) / 2];
+                        int[] strainStat = new int[infStat.length];
+
+                        if (numCasual >= map_NumberCasual6Months.length) {
+                            map_NumberCasual6Months = Arrays.copyOf(map_NumberCasual6Months, numCasual + 1);
+                            map_NumberCasual6MonthInfected = Arrays.copyOf(map_NumberCasual6MonthInfected, numCasual + 1);
+                            map_NumberCasual6MonthInfectedNewStrain = Arrays.copyOf(map_NumberCasual6MonthInfectedNewStrain, numCasual + 1);
+                        }
+
+                        for (int p = 0; p < infStat.length; p++) {
+                            infStat[p] = Integer.parseInt(ent[INF_OFFSET + 2 * p]);
+                            strainStat[p] = Integer.parseInt(ent[INF_OFFSET + 2 * p + 1]);
+                        }
+
+                        updateExportedPopCount(count, infStat, strainStat, numCasual,
+                                map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain);
+
+                    }
+
+                }
 
             } else { // Do it directly from pop file
 
@@ -901,44 +927,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                             strainStat = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite();
                         }
 
-                        boolean hasInf = false;
-                        boolean hasNewStrain = false;
-                        for (int site = 0; site < infStat.length; site++) {
-                            if (infStat[site] != AbstractIndividualInterface.INFECT_S) {
-                                count[OFFSET_SITE + site]++;
-                                hasInf = true;
-                                if (strainStat != null && strainStat[site] > 0) {
-                                    hasNewStrain |= (strainStat[site] == 0b10 || strainStat[site] == 0b11);
-                                }
-                            }
-                            if (strainStat != null && strainStat[site] > 0) {
-                                switch (strainStat[site]) {
-                                    case 0b01:
-                                        count[OFFSET_S01 + site]++;
-                                        break;
-                                    case 0b10:
-                                        count[OFFSET_S10 + site]++;
-                                        break;
-                                    case 0b11:
-                                        count[OFFSET_S11 + site]++;
-                                        break;
-                                    default:
-                                        System.err.println("Simulation_MSM_Population.decodeExportedPopulationFiles(): strain stat 0b"
-                                                + Integer.toBinaryString(strainStat[site]) + " not supported");
-                                }
-                            }
-                        }
-
-                        map_NumberCasual6Months[numCasual]++;
-                        if (hasInf) {
-                            count[OFFSET_ANY]++;
-                            map_NumberCasual6MonthInfected[numCasual]++;
-                        }
-
-                        if (hasNewStrain) {
-                            count[OFFSET_ANY_10]++;
-                            map_NumberCasual6MonthInfectedNewStrain[numCasual]++;
-                        }
+                        updateExportedPopCount(count, infStat, strainStat, numCasual,
+                                map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain);
                     }
 
                 }
@@ -951,6 +941,52 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
             System.out.println("Analysing pop file " + popFile.getName() + " completed.");
             return res;
+        }
+
+        protected void updateExportedPopCount(int[] count, int[] infStat, int[] strainStat, int numCasual,
+                int[] map_NumberCasual6Months, int[] map_NumberCasual6MonthInfected, int[] map_NumberCasual6MonthInfectedNewStrain) {
+            // Size of population
+            count[1]++;
+
+            // Infection stat
+            boolean hasInf = false;
+            boolean hasNewStrain = false;
+            for (int site = 0; site < infStat.length; site++) {
+                if (infStat[site] != AbstractIndividualInterface.INFECT_S) {
+                    count[OFFSET_SITE + site]++;
+                    hasInf = true;
+                    if (strainStat != null && strainStat[site] > 0) {
+                        hasNewStrain |= (strainStat[site] == 0b10 || strainStat[site] == 0b11);
+                    }
+                }
+                if (strainStat != null && strainStat[site] > 0) {
+                    switch (strainStat[site]) {
+                        case 0b01:
+                            count[OFFSET_S01 + site]++;
+                            break;
+                        case 0b10:
+                            count[OFFSET_S10 + site]++;
+                            break;
+                        case 0b11:
+                            count[OFFSET_S11 + site]++;
+                            break;
+                        default:
+                            System.err.println("Simulation_MSM_Population.decodeExportedPopulationFiles(): strain stat 0b"
+                                    + Integer.toBinaryString(strainStat[site]) + " not supported");
+                    }
+                }
+            }
+
+            map_NumberCasual6Months[numCasual]++;
+            if (hasInf) {
+                count[OFFSET_ANY]++;
+                map_NumberCasual6MonthInfected[numCasual]++;
+            }
+
+            if (hasNewStrain) {
+                count[OFFSET_ANY_10]++;
+                map_NumberCasual6MonthInfectedNewStrain[numCasual]++;
+            }
         }
 
     }
