@@ -69,19 +69,20 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public static final String[] PROP_NAME_MSM_MIS = {
         "PROP_STRAINS_INTRO_AT", "PROP_STRAINS_COEXIST_MAT",
-        "PROP_MSM_SIM_TYPE", "PROP_MSM_NUM_INF_TARGET",};
+        "PROP_MSM_SIM_TYPE", "PROP_MSM_CUSTOM_PARAMETER",        
+    };
 
     public static final Class[] PROP_CLASS_MSM_MIS = {
         float[][].class, // float[]{globaltime, strainNum, site, likelihood to co-exist, number of infection to introduce, frequency (optional) }
         float[][].class, // float[exist_strain][new_strain]{likelihood to coexist}
         Integer.class, // 0 (default) = simulation, 1 = optimisation
-        String.class, // For optimisation prevalence 
+        String.class, // For optimisation infection targer      
     };
 
     public static final int PROP_STRAINS_INTRO_AT = PROP_NAME.length;
     public static final int PROP_STRAINS_COEXIST_MAT = PROP_STRAINS_INTRO_AT + 1;
     public static final int PROP_MSM_SIM_TYPE = PROP_STRAINS_COEXIST_MAT + 1;
-    public static final int PROP_MSM_NUM_INF_TARGET = PROP_MSM_SIM_TYPE + 1;
+    public static final int PROP_MSM_CUSTOM_PARAMETER = PROP_MSM_SIM_TYPE + 1;
 
     // Output filename
     public static final String[] FILE_NAMES_OBJ = {"endNumInf.obj", "extinctAt.obj", "snapCount.obj",
@@ -120,6 +121,17 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public final static Pattern Pattern_importFile = Pattern.compile("pop_(\\d+).zip");
 
+    
+    private String simCustomParameterStr = null;
+
+    public String getSimCustomParameterStr() {
+        return simCustomParameterStr;
+    }
+
+    public void setSimCustomParameterStr(String simCustomParameterStr) {
+        this.simCustomParameterStr = simCustomParameterStr;
+    }               
+    
     public boolean[] getSkipNThSeed() {
         return skipNThSeed;
     }
@@ -307,8 +319,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
         }
         
         
-        System.out.println("7: " + propModelInit[7]);
-        System.out.println("8: " + propModelInit[8]);
+        //System.out.println("7: " + propModelInit[7]);
+        //System.out.println("8: " + propModelInit[8]);
         
         
         
@@ -477,6 +489,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     if (eventPointers != null) {
                         eventPointers[runnable[r].getId()] = runnable[r].getEventsPointer();
                     }
+                    
+                    if(getSimCustomParameterStr() != null){
+                        if(getSimCustomParameterStr().contains("Survial_Analysis")){
+                            runnable[r].setSurivalAnalysis_patient_zero(true);
+                        }                                                
+                    }
+                    
 
                     if (((Integer) propVal[PROP_USE_PARALLEL]) != 0) {
                         executor.submit(runnable[r]);

@@ -13,7 +13,8 @@ public class Test_Simulation_MSM_MulitInfectionSite {
             //"Import_1_BaseModel_Test",
             //"Import_1_No_Treatment_R",
             //"Import_1_50Eff_Treatment_R"
-            "Optim_7",               
+            "Import_1_No_Treatment_R_TSA",
+            //"Optim_7",               
             //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\1000 Runs",                
         };        
        

@@ -23,6 +23,7 @@ import util.StaticMethods;
 import infection.MultiStrainInfectionInterface;
 import population.person.MultiSiteMultiStrainPersonInterface;
 import population.person.RelationshipPerson_MSM;
+import relationship.SingleRelationship;
 
 /**
  *
@@ -78,6 +79,22 @@ public class SinglePopRunnable implements Runnable {
     ArrayList<float[]> strainIntroEnt = new ArrayList<>();
     int strainIntroPt = 0;
     float[][] coexistMat;
+
+    // For survial analysis
+    boolean tsa_patient_zero = false;
+    RelationshipPerson_MSM patient_zero = null;
+    int patient_zero_global_time = -1;
+    HashMap<Integer, int[]> patient_zero_partnersCollection = null;
+
+    ArrayList<int[]> newStrainSpreadSummary = new ArrayList(); // time, patient_zero_id, patient_zero_strain_stat, target_id, targer_strain_stat 
+
+    public void setSurivalAnalysis_patient_zero(boolean tsa_patient_zero) {
+        this.tsa_patient_zero = tsa_patient_zero;
+    }
+
+    public void setPatient_zero(RelationshipPerson_MSM patient_zero) {
+        this.patient_zero = patient_zero;
+    }
 
     public void setCoexistMat(float[][] coexistMat) {
         this.coexistMat = coexistMat;
@@ -347,8 +364,8 @@ public class SinglePopRunnable implements Runnable {
                             numPartnStr.append(person.getId());
                             numPartnStr.append(',');
                             numPartnStr.append((int) person.getAge());
-                            numPartnStr.append(',');                            
-                            numPartnStr.append(((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue());                            
+                            numPartnStr.append(',');
+                            numPartnStr.append(((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue());
                             numPartnStr.append(',');
                             numPartnStr.append(inReg ? 1 : 0);
                             numPartnStr.append(',');
@@ -359,9 +376,9 @@ public class SinglePopRunnable implements Runnable {
                                 numPartnStr.append(',');
                                 numPartnStr.append(strainStat[i]);
                             }
-                            wri.println(numPartnStr.toString());                            
+                            wri.println(numPartnStr.toString());
                         }
-                        
+
                         wri.close();
 
                     } catch (IOException ex) {
@@ -828,6 +845,101 @@ public class SinglePopRunnable implements Runnable {
                         }
                     }
 
+                    // Check for surival analysis 
+                    if (tsa_patient_zero && patient_zero != null) {
+
+                        HashMap<Integer, RelationshipPerson_MSM> mapping = new HashMap<>();
+                        for (AbstractIndividualInterface person : pop.getPop()) {
+                            RelationshipPerson_MSM p = (RelationshipPerson_MSM) person;
+                            mapping.put(p.getId(), p);
+                        }
+
+                        HashMap<Integer, int[]> patient_zero_partnersCollection_current = new HashMap<>();
+
+                        for (RelationshipMap relMap : pop.getRelMap()) {
+                            if (relMap.containsVertex(patient_zero.getId())) {
+                                SingleRelationship[] relArr = relMap.edgesOf(patient_zero.getId()).toArray(new SingleRelationship[0]);
+
+                                for (SingleRelationship rel1 : relArr) {
+                                    int[] partners = rel1.getLinksValues();
+
+                                    RelationshipPerson_MSM partner;
+
+                                    if (patient_zero.getId() == partners[0]) {
+                                        partner = mapping.get(partners[1]);
+                                    } else {
+                                        partner = mapping.get(partners[0]);
+                                    }
+                                    patient_zero_partnersCollection_current.put(partner.getId(),
+                                            Arrays.copyOf(partner.getCurrentStrainsAtSite(),
+                                                    partner.getCurrentStrainsAtSite().length));
+
+                                    if (hasNewStrain(partner)) {
+
+                                        boolean newInfectFromPatientZero = false;
+
+                                        if (patient_zero_partnersCollection.containsKey(partner.getId())) {
+
+                                            int[] strainStat = partner.getCurrentStrainsAtSite();
+                                            int[] pastStat = patient_zero_partnersCollection.get(partner.getId());
+
+                                            for (int k = 0; k < pastStat.length; k++) {
+                                                newInfectFromPatientZero |= (strainStat[k] & 0b10) > 0 && (pastStat[k] & 0b10) == 0;
+                                            }
+
+                                        } else {
+
+                                            newInfectFromPatientZero = true;
+
+                                        }
+
+                                        if (newInfectFromPatientZero) {
+
+                                            int[] newEnt = newEnt = new int[1 // time
+                                                    + 2 // patient_zero_id, patient_zero_age
+                                                    + patient_zero.getCurrentStrainsAtSite().length
+                                                    + 2 // partner_id, partner_age
+                                                    + partner.getCurrentStrainsAtSite().length];
+
+                                            int sp = 0;
+                                            newEnt[0] = pop.getGlobalTime();
+                                            sp++;
+                                            newEnt[sp] = patient_zero.getId();
+                                            sp++;
+                                            newEnt[sp] = (int) patient_zero.getAge();
+                                            sp++;
+                                            for (int st = 0; st < patient_zero.getCurrentStrainsAtSite().length; st++) {
+                                                newEnt[sp] = patient_zero.getCurrentStrainsAtSite()[st];
+                                                sp++;
+                                            }
+                                            newEnt[sp] = partner.getId();
+                                            sp++;
+                                            newEnt[sp] = (int) partner.getAge();
+                                            sp++;
+                                            for (int st = 0; st < partner.getCurrentStrainsAtSite().length; st++) {
+                                                newEnt[sp] = partner.getCurrentStrainsAtSite()[st];
+                                                sp++;
+                                            }
+                                            newStrainSpreadSummary.add(newEnt);
+                                        }
+
+                                    }
+
+                                }
+
+                            }
+                        }
+
+                        patient_zero_partnersCollection = patient_zero_partnersCollection_current;
+
+                        if (!hasNewStrain(patient_zero)) {
+
+                            showStrStatus("S" + getId() + ": Patient zero has no new strain. Simulation terminated.");
+                            break runSim;
+                        }
+
+                    }
+
                 }
 
                 reportStepStatus(t);
@@ -844,6 +956,24 @@ public class SinglePopRunnable implements Runnable {
                     + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()));
 
             exportPopAt(true);
+            
+            
+            if(tsa_patient_zero && newStrainSpreadSummary != null){
+                
+                File strainSpreadSummaryCSV = new File(baseDir, "newStainSpread_" + patient_zero_global_time + ".csv");
+                PrintWriter wri = new PrintWriter(strainSpreadSummaryCSV);
+                for(int[] ent : newStrainSpreadSummary){
+                    for(int i  =0 ; i < ent.length; i++){
+                        if(i != 0){
+                            wri.print(',');
+                        }
+                        wri.print(ent[i]);                        
+                    }                                       
+                }
+                wri.close();                                                        
+            }
+            
+            
 
             if (pop instanceof MSMPopulation) {
                 MSMPopulation mPop = (MSMPopulation) pop;
@@ -870,6 +1000,15 @@ public class SinglePopRunnable implements Runnable {
             }
         }
 
+    }
+
+    protected static boolean hasNewStrain(RelationshipPerson_MSM p) {
+        int[] strainStat = p.getCurrentStrainsAtSite();
+        boolean hasNewStrain = false;
+        for (int i = 0; i < strainStat.length; i++) {
+            hasNewStrain |= (strainStat[i] & 0b10) > 0;
+        }
+        return hasNewStrain;
     }
 
     public void introStrain() {
@@ -911,6 +1050,43 @@ public class SinglePopRunnable implements Runnable {
 
                         System.out.println("S" + getId() + ": switching #" + canArr[i].getId() + "'s infection at site " + site
                                 + " to strain 0b" + Integer.toBinaryString(1 << strainId) + " at " + getPopulation().getGlobalTime());
+
+                        if (tsa_patient_zero && patient_zero == null) {
+
+                            HashMap<Integer, RelationshipPerson_MSM> mapping = new HashMap<>();
+                            for (AbstractIndividualInterface person : pop.getPop()) {
+                                RelationshipPerson_MSM p = (RelationshipPerson_MSM) person;
+                                mapping.put(p.getId(), p);
+                            }
+
+                            // Set surival analysis                            
+                            patient_zero = (RelationshipPerson_MSM) canArr[i];
+                            patient_zero_global_time = pop.getGlobalTime();
+
+                            patient_zero_partnersCollection = new HashMap<>();
+                            for (RelationshipMap relMap : pop.getRelMap()) {
+                                if (relMap.containsVertex(patient_zero.getId())) {
+                                    SingleRelationship[] relArr = relMap.edgesOf(patient_zero.getId()).toArray(new SingleRelationship[0]);
+
+                                    for (SingleRelationship rel1 : relArr) {
+                                        int[] partners = rel1.getLinksValues();
+
+                                        RelationshipPerson_MSM partner;
+
+                                        if (patient_zero.getId() == partners[0]) {
+                                            partner = mapping.get(partners[1]);
+                                        } else {
+                                            partner = mapping.get(partners[0]);
+                                        }
+                                        patient_zero_partnersCollection.put(partner.getId(),
+                                                Arrays.copyOf(partner.getCurrentStrainsAtSite(),
+                                                        partner.getCurrentStrainsAtSite().length));
+                                    }
+
+                                }
+                            }
+
+                        }
                     }
                 }
 

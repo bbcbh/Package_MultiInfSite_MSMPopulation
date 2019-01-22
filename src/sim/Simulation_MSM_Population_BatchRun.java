@@ -74,8 +74,8 @@ public class Simulation_MSM_Population_BatchRun {
                 // ImportPath
                 rArg[0] = propFile.toFile().getParentFile().getAbsolutePath();
                 // Target
-                rArg[1] = sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_NUM_INF_TARGET]
-                        != null ? sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_NUM_INF_TARGET].toString() : "860,830,20";
+                rArg[1] = sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER]
+                        != null ? sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER].toString() : "20,830,860";
                 // Number of sim 
                 rArg[2] = sim.getPropVal()[Simulation_MSM_Population.PROP_NUM_SIM_PER_SET]
                         != null ? sim.getPropVal()[Simulation_MSM_Population.PROP_NUM_SIM_PER_SET].toString() : "";
@@ -96,6 +96,11 @@ public class Simulation_MSM_Population_BatchRun {
 
             } else {
                 System.out.println("Generate results set for " + propFile.toFile().getParentFile().getAbsolutePath());
+                
+                if(sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER] != null){
+                    sim.setSimCustomParameterStr(sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER].toString());
+                }                                 
+                
                 sim.generateOneResultSet();
                 sim.decodeSnapCountFile();
             }

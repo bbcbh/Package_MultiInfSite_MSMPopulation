@@ -204,7 +204,12 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     private transient int screenTarPt = 0;
     private transient int screenDayPt = 0;
     private transient int[] screeningToday = null; // Length of screening freq
-
+    
+    
+    
+    
+    
+       
     // Screening (Targeted)
     private PersonClassifier targetedScreenClassifier = new PersonClassifier() {
         @Override
