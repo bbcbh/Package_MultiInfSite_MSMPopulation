@@ -12,7 +12,7 @@ public class Test_Simulation_DecodeSnapCount {
 
     public static void main(String[] arg) throws IOException, FileNotFoundException, ClassNotFoundException {
 
-        File singleSimFolder = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\1000_Runs\\Import_1_BaseModel");//"C:\\Users\\Bhui\\Desktop\\TestDir");
+        File singleSimFolder = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test\\Import_1_No_Treatment_R");//"C:\\Users\\Bhui\\Desktop\\TestDir");
 
         Simulation_MSM_Population sim = new Simulation_MSM_Population();
 

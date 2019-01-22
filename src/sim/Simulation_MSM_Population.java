@@ -305,6 +305,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
             }
 
         }
+        
+        
+        System.out.println("7: " + propModelInit[7]);
+        System.out.println("8: " + propModelInit[8]);
+        
+        
+        
         while (simSoFar < numSimTotal && !stopNextTurn) {
             int numThreads = Math.min(numProcess, numSimTotal - simSoFar);
             if (threadCounter < simToSkip) {

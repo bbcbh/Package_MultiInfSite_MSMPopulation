@@ -10,10 +10,10 @@ public class Test_Simulation_MSM_MulitInfectionSite {
    
         String[] grpDirNames = new String[]{
             "C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test", 
-            "Import_1_BaseModel",
+            //"Import_1_BaseModel_Test",
             //"Import_1_No_Treatment_R",
             //"Import_1_50Eff_Treatment_R"
-            //"Optim",               
+            "Optim_7",               
             //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\1000 Runs",                
         };        
        
