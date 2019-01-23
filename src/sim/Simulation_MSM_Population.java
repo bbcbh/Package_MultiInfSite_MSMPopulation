@@ -47,7 +47,7 @@ import util.runnable.ExtractFieldRunnable;
  *
  * @author Ben Hui
  *
- * @version 20190116
+ * @version 20190122
  *
  * <pre>
  * History
@@ -63,14 +63,15 @@ import util.runnable.ExtractFieldRunnable;
  *     - Add thread support for decoding population zip file.
  * 20190116
  *     - Add support for exported individual snapshot
+ * 20190122
+ *  - Add support for survival analysis
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
 
     public static final String[] PROP_NAME_MSM_MIS = {
         "PROP_STRAINS_INTRO_AT", "PROP_STRAINS_COEXIST_MAT",
-        "PROP_MSM_SIM_TYPE", "PROP_MSM_CUSTOM_PARAMETER",        
-    };
+        "PROP_MSM_SIM_TYPE", "PROP_MSM_CUSTOM_PARAMETER",};
 
     public static final Class[] PROP_CLASS_MSM_MIS = {
         float[][].class, // float[]{globaltime, strainNum, site, likelihood to co-exist, number of infection to introduce, frequency (optional) }
@@ -93,10 +94,11 @@ public class Simulation_MSM_Population implements SimulationInterface {
     public static final int FILE_EVENT_POINTER = FILE_SNAPCOUNTS + 1;
     public static final int FILE_INCIDENT_COUNT = FILE_EVENT_POINTER + 1;
 
-    public static final String[] FILE_NAMES_CSV = {"endNumInfPerson.csv", "infStatSnapshot.csv", "numPartnersInlast6Months.csv"};
+    public static final String[] FILE_NAMES_CSV = {"endNumInfPerson.csv", "infStatSnapshot.csv", "numPartnersInlast6Months.csv", "newStrainsHasRegPartners.csv"};
     public static final int FILE_END_NUM_INF_PERSON_CSV = 0;
     public static final int FILE_INFECTION_STAT_CSV = FILE_END_NUM_INF_PERSON_CSV + 1;
     public static final int FILE_NUM_PARTERS_IN_LAST_6_MONTHS = FILE_INFECTION_STAT_CSV + 1;
+    public static final int FILE_NEW_STRAIN_HAS_REG_PARTNERS = FILE_NUM_PARTERS_IN_LAST_6_MONTHS + 1;
 
     public static final String POP_PROP_INIT_PREFIX = "POP_PROP_INIT_PREFIX_";
 
@@ -121,7 +123,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public final static Pattern Pattern_importFile = Pattern.compile("pop_(\\d+).zip");
 
-    
     private String simCustomParameterStr = null;
 
     public String getSimCustomParameterStr() {
@@ -130,8 +131,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public void setSimCustomParameterStr(String simCustomParameterStr) {
         this.simCustomParameterStr = simCustomParameterStr;
-    }               
-    
+    }
+
     public boolean[] getSkipNThSeed() {
         return skipNThSeed;
     }
@@ -317,12 +318,9 @@ public class Simulation_MSM_Population implements SimulationInterface {
             }
 
         }
-        
-        
+
         //System.out.println("7: " + propModelInit[7]);
         //System.out.println("8: " + propModelInit[8]);
-        
-        
         
         while (simSoFar < numSimTotal && !stopNextTurn) {
             int numThreads = Math.min(numProcess, numSimTotal - simSoFar);
@@ -489,13 +487,12 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     if (eventPointers != null) {
                         eventPointers[runnable[r].getId()] = runnable[r].getEventsPointer();
                     }
-                    
-                    if(getSimCustomParameterStr() != null){
-                        if(getSimCustomParameterStr().contains("Survial_Analysis")){
+
+                    if (getSimCustomParameterStr() != null) {
+                        if (getSimCustomParameterStr().contains("Survival_Analysis")) {
                             runnable[r].setSurivalAnalysis_patient_zero(true);
-                        }                                                
+                        }
                     }
-                    
 
                     if (((Integer) propVal[PROP_USE_PARALLEL]) != 0) {
                         executor.submit(runnable[r]);
@@ -873,7 +870,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
         @Override
         public int[][] call() throws Exception {
-            int[][] res = new int[4][]; // 0 = count, 1 = map_NumberCasual6Months, 2 = map_NumberCasual6MonthInfected, 3 = map_NumberCasual6MonthInfectedNewStrain
+            int[][] res = new int[5][]; // 0 = count, 1 = map_NumberCasual6Months, 2 = map_NumberCasual6MonthInfected, 3 = map_NumberCasual6MonthInfectedNewStrain
+            // 5 = newStrainHasRegPartner
 
             Matcher m = Pattern_importFile.matcher(popFile.getName());
             m.find();
@@ -883,6 +881,9 @@ public class Simulation_MSM_Population implements SimulationInterface {
             int[] map_NumberCasual6MonthInfected = new int[20];
             int[] map_NumberCasual6MonthInfectedNewStrain = new int[20];
             int[] count = new int[inf_stat_header.split(",").length];
+
+            ArrayList<Integer> newStrainHasReg = new ArrayList<>();
+
             count[0] = popId;
 
             // Check for decoded indivdual snapshot             
@@ -901,6 +902,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         int numCasual = Integer.parseInt(ent[4]);
                         int[] infStat = new int[(ent.length - INF_OFFSET) / 2];
                         int[] strainStat = new int[infStat.length];
+                        int numReg = Integer.parseInt(ent[3]);
 
                         if (numCasual >= map_NumberCasual6Months.length) {
                             map_NumberCasual6Months = Arrays.copyOf(map_NumberCasual6Months, numCasual + 1);
@@ -913,8 +915,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                             strainStat[p] = Integer.parseInt(ent[INF_OFFSET + 2 * p + 1]);
                         }
 
-                        updateExportedPopCount(count, infStat, strainStat, numCasual,
-                                map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain);
+                        updateExportedPopCount(count, infStat, strainStat, numReg, numCasual,
+                                map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain, newStrainHasReg);
 
                     }
 
@@ -953,8 +955,12 @@ public class Simulation_MSM_Population implements SimulationInterface {
                             strainStat = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite();
                         }
 
-                        updateExportedPopCount(count, infStat, strainStat, numCasual,
-                                map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain);
+                        int numReg = pop.getRelMap()[MSMPopulation.MAPPING_REG].containsVertex(p.getId())
+                                ? pop.getRelMap()[MSMPopulation.MAPPING_REG].edgesOf(p.getId()).size() : 0;
+
+                        updateExportedPopCount(count, infStat, strainStat, numReg, numCasual,
+                                map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain,
+                                newStrainHasReg);
                     }
 
                 }
@@ -964,13 +970,18 @@ public class Simulation_MSM_Population implements SimulationInterface {
             res[1] = map_NumberCasual6Months;
             res[2] = map_NumberCasual6MonthInfected;
             res[3] = map_NumberCasual6MonthInfectedNewStrain;
+            res[4] = new int[newStrainHasReg.size()];
+            for (int i = 0; i < res[4].length; i++) {
+                res[4][i] = newStrainHasReg.get(i);
+            }
 
             System.out.println("Analysing pop file " + popFile.getName() + " completed.");
             return res;
         }
 
-        protected void updateExportedPopCount(int[] count, int[] infStat, int[] strainStat, int numCasual,
-                int[] map_NumberCasual6Months, int[] map_NumberCasual6MonthInfected, int[] map_NumberCasual6MonthInfectedNewStrain) {
+        protected void updateExportedPopCount(int[] count, int[] infStat, int[] strainStat, int numReg, int numCasual,
+                int[] map_NumberCasual6Months, int[] map_NumberCasual6MonthInfected, int[] map_NumberCasual6MonthInfectedNewStrain,
+                ArrayList<Integer> newStrainHasReg) {
             // Size of population
             count[1]++;
 
@@ -1012,7 +1023,9 @@ public class Simulation_MSM_Population implements SimulationInterface {
             if (hasNewStrain) {
                 count[OFFSET_ANY_10]++;
                 map_NumberCasual6MonthInfectedNewStrain[numCasual]++;
+                newStrainHasReg.add(numReg);
             }
+
         }
 
     }
@@ -1076,7 +1089,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 pri_numPartnerLast6Months.println("Sim, Num casual partners in last 6 months, Freq, Freq (infected), Freq (new strain)");
             }
 
-            PrintWriter[] writers = new PrintWriter[]{pri_inf_stat, pri_numPartnerLast6Months};
+            PrintWriter pri_newStrainHasRegPartner = new PrintWriter(
+                    new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NEW_STRAIN_HAS_REG_PARTNERS]), true));
+            if (!prePrintExist[FILE_NEW_STRAIN_HAS_REG_PARTNERS]) {
+                pri_newStrainHasRegPartner.println("Sim, Num of Reg for those with new strain");
+            }
+
+            PrintWriter[] writers = new PrintWriter[]{pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner};
 
             ExecutorService threadpool = null;
             int inThreadPool = 0;
@@ -1135,10 +1154,11 @@ public class Simulation_MSM_Population implements SimulationInterface {
             int exportedSoFar, Future<int[][]>[] result_Map,
             PrintWriter[] writers) {
 
-        PrintWriter pri_inf_stat, pri_numPartnerLast6Months;
+        PrintWriter pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner;
 
         pri_inf_stat = writers[0];
         pri_numPartnerLast6Months = writers[1];
+        pri_newStrainHasRegPartner = writers[2];
 
         threadpool.shutdown();
 
@@ -1163,6 +1183,12 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 int[] map_NumberCasual6MonthInfected = res[2];
                 int[] map_NumberCasual6MonthInfectedNewStrain = res[3];
 
+                int[] newStrainHasReg = res[4];
+
+                if (newStrainHasReg.length == 0) {
+                    newStrainHasReg = new int[]{-1};
+                }
+
                 pri_inf_stat.print(exportedSoFar);
                 for (int c = 1; c < count.length; c++) {
                     pri_inf_stat.print(',');
@@ -1185,6 +1211,14 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 }
 
                 pri_numPartnerLast6Months.flush();
+
+                pri_newStrainHasRegPartner.print(exportedSoFar);
+                for (int k = 0; k < newStrainHasReg.length; k++) {
+                    pri_newStrainHasRegPartner.print(',');
+                    pri_newStrainHasRegPartner.print(newStrainHasReg[k]);
+                }
+                pri_newStrainHasRegPartner.println();
+                pri_newStrainHasRegPartner.flush();
 
             } catch (InterruptedException | ExecutionException ex) {
                 StringWriter str = new StringWriter();

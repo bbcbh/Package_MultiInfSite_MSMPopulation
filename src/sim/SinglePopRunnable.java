@@ -28,7 +28,7 @@ import relationship.SingleRelationship;
 /**
  *
  * @author Ben Hui
- * @version 20190116
+ * @version 20190122
  *
  * History:  <pre>
  * 20150313
@@ -41,6 +41,8 @@ import relationship.SingleRelationship;
  *  - Remove export population if basedir is null
  * 20190116
  *  - Add support for exporting indivdual behavior
+ * 20190122
+ *  - Add support for survival analysis
  *
  * </pre>
  *
@@ -85,7 +87,6 @@ public class SinglePopRunnable implements Runnable {
     RelationshipPerson_MSM patient_zero = null;
     int patient_zero_global_time = -1;
     HashMap<Integer, int[]> patient_zero_partnersCollection = null;
-
     ArrayList<int[]> newStrainSpreadSummary = new ArrayList(); // time, patient_zero_id, patient_zero_strain_stat, target_id, targer_strain_stat 
 
     public void setSurivalAnalysis_patient_zero(boolean tsa_patient_zero) {
@@ -801,7 +802,8 @@ public class SinglePopRunnable implements Runnable {
                     }
 
                     // Check for extinction    
-                    // Only valid if there already some infection before
+                    // Only valid if there already some infection before                                                                                              
+                    
                     if (getPopulation().getNumInf() != null) {
                         boolean allExtinct = true;
                         for (int infId = 0; infId < extinctionAt.length; infId++) {
@@ -841,7 +843,10 @@ public class SinglePopRunnable implements Runnable {
                                 }
                                 s++;
                             }
-                            break runSim;
+
+                            if (exportAt.length == 0) {
+                                break runSim;
+                            }
                         }
                     }
 
@@ -933,9 +938,12 @@ public class SinglePopRunnable implements Runnable {
                         patient_zero_partnersCollection = patient_zero_partnersCollection_current;
 
                         if (!hasNewStrain(patient_zero)) {
+                            patient_zero = null;
 
-                            showStrStatus("S" + getId() + ": Patient zero has no new strain. Simulation terminated.");
-                            break runSim;
+                            if (exportAt.length == 0) {
+                                showStrStatus("S" + getId() + ": Patient zero has no new strain. Simulation terminated.");
+                                break runSim;
+                            }
                         }
 
                     }
@@ -955,25 +963,30 @@ public class SinglePopRunnable implements Runnable {
             showStrStatus("S" + getId() + ": Simulation complete."
                     + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()));
 
-            exportPopAt(true);
-            
-            
-            if(tsa_patient_zero && newStrainSpreadSummary != null){
-                
-                File strainSpreadSummaryCSV = new File(baseDir, "newStainSpread_" + patient_zero_global_time + ".csv");
-                PrintWriter wri = new PrintWriter(strainSpreadSummaryCSV);
-                for(int[] ent : newStrainSpreadSummary){
-                    for(int i  =0 ; i < ent.length; i++){
-                        if(i != 0){
-                            wri.print(',');
-                        }
-                        wri.print(ent[i]);                        
-                    }                                       
-                }
-                wri.close();                                                        
+            if (exportAt.length != 0) {
+                exportPopAt(true);
             }
-            
-            
+
+            if (tsa_patient_zero && newStrainSpreadSummary != null) {
+
+                File strainSpreadSummaryCSV = new File(baseDir, "newStrainSpread");
+
+                strainSpreadSummaryCSV.mkdirs();
+
+                strainSpreadSummaryCSV = new File(strainSpreadSummaryCSV, "Survival_" + this.getId() + "_" + patient_zero_global_time + ".csv");
+
+                try (PrintWriter wri = new PrintWriter(strainSpreadSummaryCSV)) {
+                    for (int[] ent : newStrainSpreadSummary) {
+                        for (int i = 0; i < ent.length; i++) {
+                            if (i != 0) {
+                                wri.print(',');
+                            }
+                            wri.print(ent[i]);
+                        }
+                        wri.println();
+                    }
+                }
+            }
 
             if (pop instanceof MSMPopulation) {
                 MSMPopulation mPop = (MSMPopulation) pop;
@@ -1059,7 +1072,7 @@ public class SinglePopRunnable implements Runnable {
                                 mapping.put(p.getId(), p);
                             }
 
-                            // Set surival analysis                            
+                            // Set survival analysis                            
                             patient_zero = (RelationshipPerson_MSM) canArr[i];
                             patient_zero_global_time = pop.getGlobalTime();
 
