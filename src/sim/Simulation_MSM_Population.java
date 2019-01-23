@@ -47,7 +47,7 @@ import util.runnable.ExtractFieldRunnable;
  *
  * @author Ben Hui
  *
- * @version 20190122
+ * @version 20190123
  *
  * <pre>
  * History
@@ -65,25 +65,29 @@ import util.runnable.ExtractFieldRunnable;
  *     - Add support for exported individual snapshot
  * 20190122
  *  - Add support for survival analysis
+ * 20190123
+ *  - Add support for skip range and output print
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
 
     public static final String[] PROP_NAME_MSM_MIS = {
         "PROP_STRAINS_INTRO_AT", "PROP_STRAINS_COEXIST_MAT",
-        "PROP_MSM_SIM_TYPE", "PROP_MSM_CUSTOM_PARAMETER",};
+        "PROP_MSM_SIM_TYPE", "PROP_MSM_CUSTOM_PARAMETER",
+        "PROP_MSM_SKIP_THREAD_RANGE",};
 
     public static final Class[] PROP_CLASS_MSM_MIS = {
         float[][].class, // float[]{globaltime, strainNum, site, likelihood to co-exist, number of infection to introduce, frequency (optional) }
         float[][].class, // float[exist_strain][new_strain]{likelihood to coexist}
         Integer.class, // 0 (default) = simulation, 1 = optimisation
         String.class, // For optimisation infection targer      
-    };
+        int[].class,};
 
     public static final int PROP_STRAINS_INTRO_AT = PROP_NAME.length;
     public static final int PROP_STRAINS_COEXIST_MAT = PROP_STRAINS_INTRO_AT + 1;
     public static final int PROP_MSM_SIM_TYPE = PROP_STRAINS_COEXIST_MAT + 1;
     public static final int PROP_MSM_CUSTOM_PARAMETER = PROP_MSM_SIM_TYPE + 1;
+    public static final int PROP_MSM_SKIP_THREAD_RANGE = PROP_MSM_CUSTOM_PARAMETER + 1;
 
     // Output filename
     public static final String[] FILE_NAMES_OBJ = {"endNumInf.obj", "extinctAt.obj", "snapCount.obj",
@@ -99,6 +103,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
     public static final int FILE_INFECTION_STAT_CSV = FILE_END_NUM_INF_PERSON_CSV + 1;
     public static final int FILE_NUM_PARTERS_IN_LAST_6_MONTHS = FILE_INFECTION_STAT_CSV + 1;
     public static final int FILE_NEW_STRAIN_HAS_REG_PARTNERS = FILE_NUM_PARTERS_IN_LAST_6_MONTHS + 1;
+
+    public static final String[] DIR_NAMES = {"output", "newStrainSpread"};
+    public static final int DIR_NAMES_OUTPUT = 0;
+    public static final int DIR_NEW_STRAIN_SPREAD =  DIR_NAMES_OUTPUT + 1;
 
     public static final String POP_PROP_INIT_PREFIX = "POP_PROP_INIT_PREFIX_";
 
@@ -116,7 +124,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
     private int maxThreads = Math.max(Runtime.getRuntime().availableProcessors(), 1);
     // Prextract 
     private Object[][] preExtractField = null;
-    // Skipping seed
+    // Skipping seed    
     private boolean[] skipNThSeed = new boolean[0];
 
     private boolean useImportIOThread = true;
@@ -133,10 +141,18 @@ public class Simulation_MSM_Population implements SimulationInterface {
         this.simCustomParameterStr = simCustomParameterStr;
     }
 
+    /**
+     *
+     * @deprecated Use PROP_MSM_SKIP_THREAD_RANGE instead
+     */
     public boolean[] getSkipNThSeed() {
         return skipNThSeed;
     }
 
+    /**
+     *
+     * @deprecated Use PROP_MSM_SKIP_THREAD_RANGE instead
+     */
     public void setSkipNThSeed(boolean[] skipNThSeed) {
         this.skipNThSeed = skipNThSeed;
     }
@@ -321,7 +337,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
         //System.out.println("7: " + propModelInit[7]);
         //System.out.println("8: " + propModelInit[8]);
-        
         while (simSoFar < numSimTotal && !stopNextTurn) {
             int numThreads = Math.min(numProcess, numSimTotal - simSoFar);
             if (threadCounter < simToSkip) {
@@ -333,11 +348,24 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                 simSoFar++;
                 threadCounter++;
+            } else if (propVal[PROP_MSM_SKIP_THREAD_RANGE] != null
+                    && ((int[]) propVal[PROP_MSM_SKIP_THREAD_RANGE])[0] <= threadCounter
+                    && ((int[]) propVal[PROP_MSM_SKIP_THREAD_RANGE])[1] >= threadCounter) {
+                long skipSeed = rng.nextLong();
+                showStrStatus("Simulation #" + threadCounter + " with seed " + skipSeed
+                        + " skipped as threadId within PROP_MSM_SKIP_THREAD_RANGE of "
+                        + Arrays.toString((int[]) propVal[PROP_MSM_SKIP_THREAD_RANGE]));
+
+                simSoFar++;
+                threadCounter++;
 
             } else {
 
                 ExecutorService executor;
                 SinglePopRunnable[] runnable = null;
+                PrintWriter[] priWri = null;
+                File outputDirFile = new File(baseDir, DIR_NAMES[DIR_NAMES_OUTPUT]);
+                outputDirFile.mkdirs();
 
                 if (usingImportPop) {
                     File[] importPopFileSim = Arrays.copyOfRange(impPopFiles, simSoFar, simSoFar + numThreads);
@@ -406,8 +434,9 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 showStrStatus("Running S" + threadCounter + " to S" + (threadCounter + numThreads - 1) + "...");
 
                 if (runnable == null || runnable.length != numThreads) {
-                    runnable = new SinglePopRunnable[numThreads];
+                    runnable = new SinglePopRunnable[numThreads];                    
                 }
+                priWri = new PrintWriter[numThreads];
 
                 executor = Executors.newFixedThreadPool(numThreads);
 
@@ -417,6 +446,22 @@ public class Simulation_MSM_Population implements SimulationInterface {
                             ((Number) propVal[PROP_NUM_SNAP]).intValue(), ((Number) propVal[PROP_SNAP_FREQ]).intValue());
 
                     runnable[r].setBaseDir(baseDir);
+
+                    // Set output 
+                    priWri[r] = new PrintWriter(new FileWriter(new File(outputDirFile, DIR_NAMES[DIR_NAMES_OUTPUT]+"_" + threadCounter + ".txt")));
+                    
+                    final PrintWriter pri_Output = priWri[r];
+                    runnable[r].setProgressSupport(new PropertyChangeSupport(runnable) {
+
+                        @Override
+                        public void firePropertyChange(String key, Object notUsed, Object str) {
+                            if (SimulationInterface.PROGRESS_MSG.equals(key)) {
+                                pri_Output.println(str);                                   
+                                System.out.println(str);
+                            }
+                        }
+
+                    });
 
                     if (propVal[PROP_POP_EXPORT_AT] != null) {
                         runnable[r].setExportBurnInPop((int[]) propVal[PROP_POP_EXPORT_AT]);
@@ -510,7 +555,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     progressSupport.firePropertyChange(PROGRESS_SIM_STORED, simSoFar, simSoFar + runnable.length);
                 }
                 simSoFar += runnable.length;
+                
                 genertateOutputFiles(runnable);
+                
+                for(PrintWriter wri : priWri){
+                    wri.close();
+                }
+                
             }
 
         }
