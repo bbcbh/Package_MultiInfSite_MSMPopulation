@@ -9,7 +9,8 @@ public class Test_Simulation_MSM_MulitInfectionSite {
 
    
         String[] grpDirNames = new String[]{
-            "C:\\Users\\bbcbh\\Documents\\NetbeanProjects\\Test", //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test", 
+            "C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test", 
+            //"C:\\Users\\bbcbh\\Documents\\NetbeanProjects\\Test", 
             //"Import_1_BaseModel_Test",
             //"Import_1_No_Treatment_R",
             //"Import_1_50Eff_Treatment_R"
