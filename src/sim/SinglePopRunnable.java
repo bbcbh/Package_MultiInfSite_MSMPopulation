@@ -286,7 +286,7 @@ public class SinglePopRunnable implements Runnable {
                 getPopulation().advanceTimeStep(1);
             }
             showStrStatus("S" + getId() + ": Model burn-in complete.");
-            exportPopAt();
+            
 
         }
     }
@@ -337,18 +337,22 @@ public class SinglePopRunnable implements Runnable {
 
                         PrintWriter wri = new PrintWriter(new java.io.FileWriter(behaviourFile));
 
-                        StringBuilder header = new StringBuilder("Id,Age,BehavType,# Reg,# Cas");
+                        StringBuilder header = new StringBuilder("Id,Age,BehavType,# Reg,# Cas, # Cas in 6 months");
 
                         for (int p = 0; p < getPopulation().getPop().length; p++) {
                             RelationshipPerson_MSM person = (RelationshipPerson_MSM) getPopulation().getPop()[p];
-                            boolean inReg
+                            int inReg
                                     = getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].containsVertex(person.getId())
-                                    && getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].degreeOf(person.getId()) > 0;
+                                    ? getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].degreeOf(person.getId()) : 0;
+
+                            int inCas
+                                    = getPopulation().getRelMap()[MSMPopulation.MAPPING_CAS].containsVertex(person.getId())
+                                    ? getPopulation().getRelMap()[MSMPopulation.MAPPING_CAS].degreeOf(person.getId()) : 0;
 
                             int[] casualRec = person.getCasualRecord();
-                            int numCasual = 0;
+                            int numCasualIn6month = 0;
                             for (int i = 0; i < casualRec.length; i++) {
-                                numCasual += (casualRec[i] != 0) ? 1 : 0;
+                                numCasualIn6month += (casualRec[i] != 0) ? 1 : 0;
                             }
 
                             int[] infStat = person.getInfectionStatus();
@@ -371,9 +375,11 @@ public class SinglePopRunnable implements Runnable {
                             numPartnStr.append(',');
                             numPartnStr.append(((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue());
                             numPartnStr.append(',');
-                            numPartnStr.append(inReg ? 1 : 0);
+                            numPartnStr.append(inReg);
                             numPartnStr.append(',');
-                            numPartnStr.append(numCasual);
+                            numPartnStr.append(inCas);
+                            numPartnStr.append(',');
+                            numPartnStr.append(numCasualIn6month);
                             for (int i = 0; i < infStat.length; i++) {
                                 numPartnStr.append(',');
                                 numPartnStr.append(infStat[i]);
@@ -845,11 +851,12 @@ public class SinglePopRunnable implements Runnable {
                                 }
                                 s++;
                             }
-
-                            if (exportAt == null || exportAt.length == 0
-                                    || exportAt[exportAt.length - 1] < pop.getGlobalTime()) {
-                                break runSim;
+                            // Force export population
+                            if (exportAt != null ){
+                                exportPopAt(true);
                             }
+                            break runSim;
+
                         }
                     }
 
@@ -974,9 +981,8 @@ public class SinglePopRunnable implements Runnable {
                     + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()));
 
             //if (exportAt.length != 0) {
-                //exportPopAt(true);
+            //exportPopAt(true);
             //}
-
             if (tsa_patient_zero && newStrainSpreadSummary != null) {
 
                 File strainSpreadSummaryCSV = new File(baseDir, Simulation_MSM_Population.DIR_NAMES[Simulation_MSM_Population.DIR_NEW_STRAIN_SPREAD]);
@@ -984,8 +990,8 @@ public class SinglePopRunnable implements Runnable {
                 strainSpreadSummaryCSV.mkdirs();
 
                 strainSpreadSummaryCSV = new File(strainSpreadSummaryCSV,
-                        Simulation_MSM_Population.DIR_NAMES[Simulation_MSM_Population.DIR_NEW_STRAIN_SPREAD] 
-                                + "_" + this.getId() + "_" + patient_zero_global_time + ".csv");
+                        Simulation_MSM_Population.DIR_NAMES[Simulation_MSM_Population.DIR_NEW_STRAIN_SPREAD]
+                        + "_" + this.getId() + "_" + patient_zero_global_time + ".csv");
 
                 try (PrintWriter wri = new PrintWriter(strainSpreadSummaryCSV)) {
                     for (int[] ent : newStrainSpreadSummary) {
