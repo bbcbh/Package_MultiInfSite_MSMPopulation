@@ -204,12 +204,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     private transient int screenTarPt = 0;
     private transient int screenDayPt = 0;
     private transient int[] screeningToday = null; // Length of screening freq
-    
-    
-    
-    
-    
-       
+
     // Screening (Targeted)
     private PersonClassifier targetedScreenClassifier = new PersonClassifier() {
         @Override
@@ -413,9 +408,11 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         for (int i = 0; i < casualPartLimit.length; i++) {
             int[] limit = Arrays.copyOf(casualPartLimit[i], casualPartLimit[i].length);
+            /*
             if (i == 0) {
                 limit[0] = 0;
             }
+             */
             if (i + 1 < casualPartLimit.length && limit[1] == casualPartLimit[i + 1][0]) {
                 limit[1]--;
             }
@@ -427,7 +424,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     }
 
     @Override
-    public void advanceTimeStep(int deltaT) {                
+    public void advanceTimeStep(int deltaT) {
 
         incrementTime(deltaT);
 
@@ -589,12 +586,30 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
             }
 
             int diff;
-            //System.out.println(getGlobalTime() + ":" + Arrays.toString(casualPart_Stat));                        
+
+            //if (getGlobalTime() > 360) {
+            //    System.out.println(getGlobalTime() + ":" + Arrays.toString(casualPart_Stat));
+            //}
             for (int g = 0; g < casualPart_Stat.length; g++) {
-                diff = Math.max(casualPart_Stat[g] - casualPart_Target[g], 0);
+
+               
                 RelationshipPerson_MSM[] changeCasualBehaviorCandidates;
 
+                int excessAbove = 0; // Need to form new partnership
+                int excessBelow = 0;
+
+                for (int k = 0; k < g; k++) {
+                    excessBelow += Math.max(casualPart_Target[k] - casualPart_Stat[k], 0);
+                }
+                for (int k = g + 1; k < casualPart_Target.length; k++) {
+                    excessAbove += Math.max(casualPart_Target[k] - casualPart_Stat[k], 0);
+                }
+                
+                diff = Math.max(casualPart_Stat[g] - casualPart_Target[g], 0);
+
                 changeCasualBehaviorCandidates = new RelationshipPerson_MSM[Math.min(diff, casualPart_candidateCollectionPt[g])];
+                
+                
                 int cPt = 0;
                 for (int c = 0; c < casualPart_candidateCollectionPt[g]; c++) {
                     if (getRNG().nextInt(casualPart_candidateCollectionPt[g] - c) < diff) {
@@ -607,16 +622,6 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 }
 
                 if (changeCasualBehaviorCandidates.length > 0) {
-
-                    int excessAbove = 0; // Need to form new partnership
-                    int excessBelow = 0;
-
-                    for (int k = 0; k < g; k++) {
-                        excessBelow += Math.max(casualPart_Target[k] - casualPart_Stat[k], 0);
-                    }
-                    for (int k = g + 1; k < casualPart_Target.length; k++) {
-                        excessAbove += Math.max(casualPart_Target[k] - casualPart_Stat[k], 0);
-                    }
 
                     for (RelationshipPerson_MSM candidate : changeCasualBehaviorCandidates) {
                         if (getRNG().nextInt(excessAbove + excessBelow) < excessAbove) {

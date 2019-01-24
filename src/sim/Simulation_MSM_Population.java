@@ -479,7 +479,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         runnable[r].setCoexistMat((float[][]) propVal[PROP_STRAINS_COEXIST_MAT]);
                     }
 
-                    runnable[r].setPrintPrevalence(((Integer) propVal[PROP_USE_PARALLEL]) == 0);
+                    runnable[r].setPrintPrevalence(((Integer) propVal[PROP_USE_PARALLEL]) <= 1);
 
                     threadCounter++;
 
