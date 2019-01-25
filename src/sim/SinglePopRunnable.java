@@ -46,6 +46,8 @@ import relationship.SingleRelationship;
  * 20190123
  *  - Add relMap index for new strain spread summary CSV
  *  - Remove automatic exportAt at end of simulation run
+ * 20190125
+ *  - Switch export all option to person stat only by default
  *
  * </pre>
  *
@@ -286,7 +288,6 @@ public class SinglePopRunnable implements Runnable {
                 getPopulation().advanceTimeStep(1);
             }
             showStrStatus("S" + getId() + ": Model burn-in complete.");
-            
 
         }
     }
@@ -303,30 +304,37 @@ public class SinglePopRunnable implements Runnable {
             if (forced || (exportAt != null && exportAtPt < exportAt.length)) {
 
                 if (!forced) {
-                    while (exportAt[exportAtPt] < getPopulation().getGlobalTime()) {
+                    while (Math.abs(exportAt[exportAtPt]) < getPopulation().getGlobalTime()) {
                         exportAtPt++;
                     }
                 }
 
-                if (forced || exportAt[exportAtPt] == getPopulation().getGlobalTime()) {
+                if (forced || (exportAtPt < exportAt.length
+                        && Math.abs(exportAt[exportAtPt]) == getPopulation().getGlobalTime())) {
 
                     File exportPopFileDir = new File(baseDir, EXPORT_PREFIX + Integer.toString(getPopulation().getGlobalTime()));
+                    exportPopFileDir.mkdirs();
+
                     File exportPopFileZip = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId() + ".zip");
 
-                    try {
-                        exportPopFileDir.mkdirs();
-                        File exportPopFileRaw = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId());
+                    // Export pop
+                    if (exportAt[exportAtPt] < 0) {
 
-                        try (ObjectOutputStream outStr = new ObjectOutputStream(new FileOutputStream(exportPopFileRaw))) {
-                            getPopulation().exportPop(outStr);
+                        try {
+
+                            File exportPopFileRaw = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId());
+
+                            try (ObjectOutputStream outStr = new ObjectOutputStream(new FileOutputStream(exportPopFileRaw))) {
+                                getPopulation().exportPop(outStr);
+                            }
+                            util.FileZipper.zipFile(exportPopFileRaw, exportPopFileZip);
+                            exportPopFileRaw.delete();
+
+                        } catch (IOException ex) {
+                            ex.printStackTrace(System.err);
+                            showStrStatus("Error in exporting pop file " + exportPopFileZip.getAbsolutePath());
+
                         }
-                        util.FileZipper.zipFile(exportPopFileRaw, exportPopFileZip);
-                        exportPopFileRaw.delete();
-
-                    } catch (IOException ex) {
-                        ex.printStackTrace(System.err);
-                        showStrStatus("Error in exporting pop file " + exportPopFileZip.getAbsolutePath());
-
                     }
 
                     // Export indivdual snapshot 
@@ -852,7 +860,7 @@ public class SinglePopRunnable implements Runnable {
                                 s++;
                             }
                             // Force export population
-                            if (exportAt != null ){
+                            if (exportAt != null) {
                                 exportPopAt(true);
                             }
                             break runSim;
@@ -973,8 +981,8 @@ public class SinglePopRunnable implements Runnable {
                     incidenceCounts[s] = ((MSMPopulation) getPopulation()).cumulativeIncidencesBySitesCount();
                 }
 
-                //int[][] singleSnapCounts = getSnapCounts()[s];
-                //System.out.println("S" + getId() + " #" + s + ":" + Arrays.deepToString(singleSnapCounts));
+                //showStrStatus("S" + getId() + ", " + getPopulation().getGlobalTime() 
+                //        + ":" + Arrays.toString(getPopulation().getNumInf()));
             }
 
             showStrStatus("S" + getId() + ": Simulation complete."

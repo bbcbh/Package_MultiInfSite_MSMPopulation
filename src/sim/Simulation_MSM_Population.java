@@ -106,7 +106,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public static final String[] DIR_NAMES = {"output", "newStrainSpread"};
     public static final int DIR_NAMES_OUTPUT = 0;
-    public static final int DIR_NEW_STRAIN_SPREAD =  DIR_NAMES_OUTPUT + 1;
+    public static final int DIR_NEW_STRAIN_SPREAD = DIR_NAMES_OUTPUT + 1;
 
     public static final String POP_PROP_INIT_PREFIX = "POP_PROP_INIT_PREFIX_";
 
@@ -434,7 +434,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 showStrStatus("Running S" + threadCounter + " to S" + (threadCounter + numThreads - 1) + "...");
 
                 if (runnable == null || runnable.length != numThreads) {
-                    runnable = new SinglePopRunnable[numThreads];                    
+                    runnable = new SinglePopRunnable[numThreads];
                 }
                 priWri = new PrintWriter[numThreads];
 
@@ -448,16 +448,16 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     runnable[r].setBaseDir(baseDir);
 
                     // Set output 
-                    priWri[r] = new PrintWriter(new FileWriter(new File(outputDirFile, DIR_NAMES[DIR_NAMES_OUTPUT]+"_" + threadCounter + ".txt")));
-                    
+                    priWri[r] = new PrintWriter(new FileWriter(new File(outputDirFile, DIR_NAMES[DIR_NAMES_OUTPUT] + "_" + threadCounter + ".txt")));
+
                     final PrintWriter pri_Output = priWri[r];
                     runnable[r].setProgressSupport(new PropertyChangeSupport(runnable) {
 
                         @Override
                         public void firePropertyChange(String key, Object notUsed, Object str) {
                             if (SimulationInterface.PROGRESS_MSG.equals(key)) {
-                                pri_Output.println(str);                                   
-                                System.out.println(str);
+                                pri_Output.println(str);
+                                //System.out.println(str);
                             }
                         }
 
@@ -555,13 +555,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     progressSupport.firePropertyChange(PROGRESS_SIM_STORED, simSoFar, simSoFar + runnable.length);
                 }
                 simSoFar += runnable.length;
-                
+
                 genertateOutputFiles(runnable);
-                
-                for(PrintWriter wri : priWri){
+
+                for (PrintWriter wri : priWri) {
                     wri.close();
                 }
-                
+
             }
 
         }
@@ -716,6 +716,26 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     pri.print(numInfected[i]);
                 }
                 pri.println();
+                
+                /*
+                int[] casualPart_Stat = new int[4];
+                for (AbstractIndividualInterface p : runnable.getPopulation().getPop()) {
+                    RelationshipPerson_MSM person = (RelationshipPerson_MSM) p;
+                    int behaviour = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+
+                    if (behaviour != RelationshipPerson_MSM.BEHAV_REG_ONLY) {
+                        int[] casualRec = person.getCasualRecord();
+                        int numCasual = 0;
+                        for (int i = 0; i < casualRec.length; i++) {
+                            numCasual += (casualRec[i] != 0) ? 1 : 0;
+                        }
+                        numCasual = Math.min(numCasual, casualPart_Stat.length - 1);
+                        casualPart_Stat[numCasual]++;
+                    }
+                }                
+                System.out.println("S" + runnable.getId() + " casualPart_Stat = " + Arrays.toString(casualPart_Stat));
+                */
+
             }
 
         }
@@ -725,6 +745,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
             }
         }
         pri.close();
+
     }
 
     public void decodeSnapCountFile() throws FileNotFoundException, IOException, ClassNotFoundException {
