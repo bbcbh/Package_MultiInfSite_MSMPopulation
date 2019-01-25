@@ -1021,6 +1021,44 @@ public class SinglePopRunnable implements Runnable {
                     1f * mPop.relLen[0] / mPop.relTotal[0],
                     1f * mPop.relLen[1] / mPop.relTotal[1],})
                 );
+
+                int[] casualPart_Stat = new int[10];
+                int[] sum = new int[4]; // 0, 1-9, 10+, All
+                String[] key = new String[]{"  0", "1-9", "10+", ""};
+                for (AbstractIndividualInterface p : pop.getPop()) {
+                    RelationshipPerson_MSM person = (RelationshipPerson_MSM) p;
+                    int behaviour = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+
+                    if (behaviour != RelationshipPerson_MSM.BEHAV_REG_ONLY) {
+                        int[] casualRec = person.getCasualRecord();
+                        int numCasual = 0;
+                        for (int i = 0; i < casualRec.length; i++) {
+                            numCasual += (casualRec[i] != 0) ? 1 : 0;
+                        }
+
+                        if (numCasual >= casualPart_Stat.length) {
+                            casualPart_Stat = Arrays.copyOf(casualPart_Stat, numCasual + 1);
+                        }
+
+                        casualPart_Stat[numCasual]++;
+
+                        sum[3]++;
+                        if (numCasual == 0) {
+                            sum[0]++;
+                        } else if (numCasual >= 1 && numCasual <= 9) {
+                            sum[1]++;
+                        } else if (numCasual >= 10) {
+                            sum[2]++;
+                        }
+                    }
+                }
+
+                showStrStatus("S" + getId() + ": Casual partnership distribution at the end = " + Arrays.toString(casualPart_Stat));
+                for (int s = 0; s < sum.length - 1; s++) {
+                    showStrStatus("S" + getId() + ":      " + key[s] + " = " + (100f * sum[s]) / sum[sum.length - 1] + "%");
+                    //System.out.println("S" + getId() + ":      " + key[s] + " = " + (100f * sum[s]) / sum[sum.length - 1] + "%");
+                }
+
             }
 
         } catch (Exception ex) {

@@ -715,27 +715,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     pri.print(',');
                     pri.print(numInfected[i]);
                 }
-                pri.println();
-                
-                /*
-                int[] casualPart_Stat = new int[4];
-                for (AbstractIndividualInterface p : runnable.getPopulation().getPop()) {
-                    RelationshipPerson_MSM person = (RelationshipPerson_MSM) p;
-                    int behaviour = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
-
-                    if (behaviour != RelationshipPerson_MSM.BEHAV_REG_ONLY) {
-                        int[] casualRec = person.getCasualRecord();
-                        int numCasual = 0;
-                        for (int i = 0; i < casualRec.length; i++) {
-                            numCasual += (casualRec[i] != 0) ? 1 : 0;
-                        }
-                        numCasual = Math.min(numCasual, casualPart_Stat.length - 1);
-                        casualPart_Stat[numCasual]++;
-                    }
-                }                
-                System.out.println("S" + runnable.getId() + " casualPart_Stat = " + Arrays.toString(casualPart_Stat));
-                */
-
+                pri.println();                                
             }
 
         }
