@@ -535,7 +535,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                     if (getSimCustomParameterStr() != null) {
                         if (getSimCustomParameterStr().contains("Survival_Analysis")) {
-                            runnable[r].setSurivalAnalysis_patient_zero(true);
+                            runnable[r].set_patient_zero(true);
                         }
                     }
 
