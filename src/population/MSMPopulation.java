@@ -589,9 +589,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
             }
 
             int diff;
-           
-            //System.out.println(getGlobalTime() + ":" + Arrays.toString(casualPart_Stat));            
 
+            //System.out.println(getGlobalTime() + ":" + Arrays.toString(casualPart_Stat));            
             for (int g = 0; g < casualPart_Stat.length; g++) {
 
                 RelationshipPerson_MSM[] changeCasualBehaviorCandidates;
@@ -1088,6 +1087,14 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         int dur;
         float[][] actFreq;
         if (mapType == MAPPING_REG) {
+
+            for (int p = 0; p < pair.length; p++) {
+                if (relMap.containsVertex(pair[p].getId())
+                        && relMap.degreeOf(pair[p].getId()) > 1) {
+                    System.out.println("Err");
+                }
+            }
+
             double regPartLength = ((Number) getFields()[MSM_REG_LENTH_AVE]).doubleValue();
             AbstractRealDistribution regLength;
             regLength = new ExponentialDistribution(getRNG(), regPartLength);
@@ -1186,6 +1193,11 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         boolean added = relMap.addEdge(pair[0].getId(), pair[1].getId(), rel);
 
         if (added) {
+
+            for (AbstractIndividualInterface person : pair) {
+                relMap.removeAvailablePerson(person);
+            }
+
             if (mapType == MAPPING_CAS) {
                 for (int p = 0; p < pair.length; p++) {
                     RelationshipPerson_MSM person = (RelationshipPerson_MSM) pair[p];

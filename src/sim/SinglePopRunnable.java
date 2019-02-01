@@ -23,7 +23,6 @@ import util.StaticMethods;
 import infection.MultiStrainInfectionInterface;
 import population.person.MultiSiteMultiStrainPersonInterface;
 import population.person.RelationshipPerson;
-import population.person.RelationshipPerson_MSM;
 import relationship.SingleRelationship;
 
 /**
@@ -51,7 +50,8 @@ import relationship.SingleRelationship;
  *  - Switch export all option to person stat only by default
  *  - Add partner history stat for patient zero
  *  - Add behavior option for intro at
- *
+ * 20190127
+ *  - Create a new RNG for selecting candidate within introStrain
  * </pre>
  *
  */
@@ -70,6 +70,8 @@ public class SinglePopRunnable implements Runnable {
     private final transient boolean[][] cummulativeSnap;              // cummulativeSnap[snapNum][classNum]
     private transient int[] extinctionAt;                             // -1 = not extinct
     private final transient int[][] incidenceCounts;                    // incidenceCounts[snapNum][countType]
+
+    private transient int[][] strainCompositionActiveRange; // [strainsCompostion]{start_time, end_time}
 
     private File importFile = null;
     private String[] importSetting = null;
@@ -99,7 +101,7 @@ public class SinglePopRunnable implements Runnable {
 
     // For survial analysis
     boolean use_patient_zero = false;
-    RelationshipPerson_MSM patient_zero = null;
+    RelationshipPerson patient_zero = null;
     int patient_zero_start_time = -1;
     int patient_zero_end_time = -1;
 
@@ -357,66 +359,71 @@ public class SinglePopRunnable implements Runnable {
                     File behaviourFile = new File(exportPopFileDir,
                             EXPORT_INDIV_PREFIX + getId() + ".csv");
 
-                    try {
+                    if (getPopulation() instanceof MSMPopulation) {
 
-                        PrintWriter wri = new PrintWriter(new java.io.FileWriter(behaviourFile));
+                        try {
 
-                        StringBuilder header = new StringBuilder("Id,Age,BehavType,# Reg,# Cas, # Cas in 6 months");
+                            PrintWriter wri = new PrintWriter(new java.io.FileWriter(behaviourFile));
 
-                        for (int p = 0; p < getPopulation().getPop().length; p++) {
-                            RelationshipPerson_MSM person = (RelationshipPerson_MSM) getPopulation().getPop()[p];
-                            int inReg
-                                    = getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].containsVertex(person.getId())
-                                    ? getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].degreeOf(person.getId()) : 0;
+                            StringBuilder header = new StringBuilder("Id,Age,BehavType,# Reg,# Cas, # Cas in 6 months");
 
-                            int inCas
-                                    = getPopulation().getRelMap()[MSMPopulation.MAPPING_CAS].containsVertex(person.getId())
-                                    ? getPopulation().getRelMap()[MSMPopulation.MAPPING_CAS].degreeOf(person.getId()) : 0;
+                            for (int p = 0; p < getPopulation().getPop().length; p++) {
+                                RelationshipPerson person = (RelationshipPerson) getPopulation().getPop()[p];
+                                int inReg
+                                        = getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].containsVertex(person.getId())
+                                        ? getPopulation().getRelMap()[MSMPopulation.MAPPING_REG].degreeOf(person.getId()) : 0;
 
-                            int[] casualRec = person.getCasualRecord();
-                            int numCasualIn6month = 0;
-                            for (int i = 0; i < casualRec.length; i++) {
-                                numCasualIn6month += (casualRec[i] != 0) ? 1 : 0;
-                            }
+                                int inCas
+                                        = getPopulation().getRelMap()[MSMPopulation.MAPPING_CAS].containsVertex(person.getId())
+                                        ? getPopulation().getRelMap()[MSMPopulation.MAPPING_CAS].degreeOf(person.getId()) : 0;
 
-                            int[] infStat = person.getInfectionStatus();
-                            int[] strainStat = person.getCurrentStrainsAtSite();
-
-                            if (p == 0) {
-                                for (int i = 0; i < infStat.length; i++) {
-                                    header.append(',');
-                                    header.append("Inf Stat_" + i);
-                                    header.append(',');
-                                    header.append("Strain Stat_" + i);
+                                int numCasualIn6month = 0;
+                                if (person instanceof population.person.RelationshipPerson_MSM) {
+                                    int[] casualRec = ((population.person.RelationshipPerson_MSM) person).getCasualRecord();
+                                    for (int i = 0; i < casualRec.length; i++) {
+                                        numCasualIn6month += (casualRec[i] != 0) ? 1 : 0;
+                                    }
                                 }
-                                wri.println(header.toString());
+
+                                int[] infStat = person.getInfectionStatus();
+                                int[] strainStat = person.getCurrentStrainsAtSite();
+
+                                if (p == 0) {
+                                    for (int i = 0; i < infStat.length; i++) {
+                                        header.append(',');
+                                        header.append("Inf Stat_" + i);
+                                        header.append(',');
+                                        header.append("Strain Stat_" + i);
+                                    }
+                                    wri.println(header.toString());
+                                }
+
+                                StringBuilder numPartnStr = new StringBuilder();
+                                numPartnStr.append(person.getId());
+                                numPartnStr.append(',');
+                                numPartnStr.append((int) person.getAge());
+                                numPartnStr.append(',');
+                                numPartnStr.append(((Number) person.getParameter(person.indexToParamName(population.person.RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue());
+                                numPartnStr.append(',');
+                                numPartnStr.append(inReg);
+                                numPartnStr.append(',');
+                                numPartnStr.append(inCas);
+                                numPartnStr.append(',');
+                                numPartnStr.append(numCasualIn6month);
+                                for (int i = 0; i < infStat.length; i++) {
+                                    numPartnStr.append(',');
+                                    numPartnStr.append(infStat[i]);
+                                    numPartnStr.append(',');
+                                    numPartnStr.append(strainStat[i]);
+                                }
+                                wri.println(numPartnStr.toString());
                             }
 
-                            StringBuilder numPartnStr = new StringBuilder();
-                            numPartnStr.append(person.getId());
-                            numPartnStr.append(',');
-                            numPartnStr.append((int) person.getAge());
-                            numPartnStr.append(',');
-                            numPartnStr.append(((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue());
-                            numPartnStr.append(',');
-                            numPartnStr.append(inReg);
-                            numPartnStr.append(',');
-                            numPartnStr.append(inCas);
-                            numPartnStr.append(',');
-                            numPartnStr.append(numCasualIn6month);
-                            for (int i = 0; i < infStat.length; i++) {
-                                numPartnStr.append(',');
-                                numPartnStr.append(infStat[i]);
-                                numPartnStr.append(',');
-                                numPartnStr.append(strainStat[i]);
-                            }
-                            wri.println(numPartnStr.toString());
+                            wri.close();
+
+                        } catch (IOException ex) {
+                            ex.printStackTrace(System.err);
                         }
-
-                        wri.close();
-
-                    } catch (IOException ex) {
-                        ex.printStackTrace(System.err);
                     }
 
                     if (!forced) {
@@ -444,6 +451,10 @@ public class SinglePopRunnable implements Runnable {
 
     public int[] getExtinctionAt() {
         return extinctionAt;
+    }
+
+    public int[][] getStrainCompositionActiveRange() {
+        return strainCompositionActiveRange;
     }
 
     public void setSnapShotOutput(PersonClassifier[] cf, boolean[] cummulStep) {
@@ -563,6 +574,12 @@ public class SinglePopRunnable implements Runnable {
 
             extinctionAt = new int[getPopulation().getInfList().length];
             Arrays.fill(extinctionAt, -1);
+
+            strainCompositionActiveRange = new int[3][2]; // Start time, end time
+            for (int[] ent : strainCompositionActiveRange) {
+                ent[0] = Integer.MAX_VALUE;
+                ent[1] = 0;
+            }
 
             modelBurnIn();
             reportStepStatus(modelBurnIn);
@@ -752,7 +769,8 @@ public class SinglePopRunnable implements Runnable {
 
                         }
 
-                        showStrStatus(output.toString());
+                        showStrStatus(output.toString());                        
+                        System.out.println(output.toString());
                     }
                     t++;
 
@@ -882,16 +900,51 @@ public class SinglePopRunnable implements Runnable {
                             break runSim;
 
                         }
+
+                    }
+                    // Check new strain and their elmination 
+
+                    AbstractIndividualInterface[] allPop = getPopulation().getPop();
+                    boolean[] hasStrainComposition = new boolean[strainCompositionActiveRange.length];
+                    Arrays.fill(hasStrainComposition, false);
+
+                    for (AbstractIndividualInterface p : allPop) {
+                        if (p instanceof MultiSiteMultiStrainPersonInterface) {
+                            int[] strainCompositionBySite = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite();
+
+                            for (int strainComposition : strainCompositionBySite) {
+                                if (strainComposition != 0) {
+                                    if (strainComposition >= strainCompositionActiveRange.length) {
+                                        int org_len = strainCompositionActiveRange.length;
+                                        strainCompositionActiveRange = Arrays.copyOf(strainCompositionActiveRange, strainComposition + 1);
+                                        hasStrainComposition = Arrays.copyOf(hasStrainComposition, strainComposition + 1);
+                                        for (int i = org_len; i < strainCompositionActiveRange.length; i++) {
+                                            strainCompositionActiveRange[i] = new int[]{Integer.MAX_VALUE, 0};
+                                            hasStrainComposition[i] = false;
+                                        }
+
+                                    }
+                                    hasStrainComposition[strainComposition] = true;
+                                    // First in pop
+                                    if (strainCompositionActiveRange[strainComposition][0] > pop.getGlobalTime()) {
+                                        strainCompositionActiveRange[strainComposition][0] = pop.getGlobalTime();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for (int i = 0; i < hasStrainComposition.length; i++) {
+                        // Extinction time
+                        if (!hasStrainComposition[i] && 
+                                strainCompositionActiveRange[i][0] < pop.getGlobalTime()
+                                && strainCompositionActiveRange[i][1] == 0) {
+                            strainCompositionActiveRange[i][1] = pop.getGlobalTime();
+                        }
                     }
 
                     // Check for surival analysis 
                     if (use_patient_zero && patient_zero != null) {
-
-                        HashMap<Integer, RelationshipPerson_MSM> mapping = new HashMap<>();
-                        for (AbstractIndividualInterface person : pop.getPop()) {
-                            RelationshipPerson_MSM p = (RelationshipPerson_MSM) person;
-                            mapping.put(p.getId(), p);
-                        }
 
                         HashMap<Integer, int[]> patient_zero_partners_current_strain = new HashMap<>();
 
@@ -903,12 +956,12 @@ public class SinglePopRunnable implements Runnable {
                                 for (SingleRelationship rel1 : relArr) {
                                     int[] partners = rel1.getLinksValues();
 
-                                    RelationshipPerson_MSM partner;
+                                    RelationshipPerson partner;
 
                                     if (patient_zero.getId() == partners[0]) {
-                                        partner = mapping.get(partners[1]);
+                                        partner = (RelationshipPerson) pop.getPersonById(partners[1]);
                                     } else {
-                                        partner = mapping.get(partners[0]);
+                                        partner = (RelationshipPerson) pop.getPersonById(partners[0]);
                                     }
 
                                     // Check if already in partnership record
@@ -917,8 +970,13 @@ public class SinglePopRunnable implements Runnable {
                                         totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_START_TIME] = pop.getGlobalTime();
                                         totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_RELATIONSHIP_LASTED_FOR] = 0;
                                         totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_TYPE] = r;
-                                        totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_BEHAVIOR]
-                                                = ((Number) partner.getParameter(partner.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+
+                                        if (partner instanceof population.person.RelationshipPerson_MSM) {
+                                            totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_BEHAVIOR]
+                                                    = ((Number) partner.getParameter(
+                                                            partner.indexToParamName(population.person.RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+                                        }
+
                                         patient_zero_partners_record.put(partner.getId(), totalCollectionEnt);
                                     } else {
                                         int[] totalCollectionEnt = patient_zero_partners_record.get(partner.getId());
@@ -1034,20 +1092,24 @@ public class SinglePopRunnable implements Runnable {
                     wri.println("Start time," + patient_zero_start_time);
                     wri.println("End time," + patient_zero_end_time);
                     wri.println("Days with new strain," + (patient_zero_end_time - patient_zero_start_time));
-                    wri.println("PATIENT_ZERO_PARNTER_REC_START_TIME,"
+                    wri.println("PATIENT_ZERO_PARNTER_ID,"
+                            + "PATIENT_ZERO_PARNTER_REC_START_TIME,"
                             + "PATIENT_ZERO_PARNTER_REC_RELATIONSHIP_LASTED_FOR,"
                             + "PATIENT_ZERO_PARNTER_REC_TYPE,"
-                            + "PATIENT_ZERO_PARNTER_PARNTER_BEHAVIOR");
+                            + "PATIENT_ZERO_PARNTER_REC_PARNTER_BEHAVIOR");
 
-                    for (Integer partner_id : patient_zero_partners_record.keySet()) {
-                        int[] ent = patient_zero_partners_record.get(partner_id);
-                        wri.println(partner_id);
-                        for (int i = 0; i < ent.length; i++) {
-                            wri.print(',');
-                            wri.print(ent[i]);
+                    if (patient_zero_partners_record != null) {
+
+                        for (Integer partner_id : patient_zero_partners_record.keySet()) {
+                            int[] ent = patient_zero_partners_record.get(partner_id);
+                            wri.print(partner_id);
+                            for (int i = 0; i < ent.length; i++) {
+                                wri.print(',');
+                                wri.print(ent[i]);
+                            }
                         }
+                        wri.println();
                     }
-                    wri.println();
 
                     wri.println("Time, Patient_zero_id, Patient_zero_strain_stat,,,Target_id, Targer_strain_stat,,,Relationship_Type");
                     for (int[] ent : patient_zero_newStrainSpreadSummary) {
@@ -1074,11 +1136,11 @@ public class SinglePopRunnable implements Runnable {
                 int[] sum = new int[4]; // 0, 1-9, 10+, All
                 String[] key = new String[]{"  0", "1-9", "10+", ""};
                 for (AbstractIndividualInterface p : pop.getPop()) {
-                    RelationshipPerson_MSM person = (RelationshipPerson_MSM) p;
-                    int behaviour = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+                    RelationshipPerson person = (RelationshipPerson) p;
+                    int behaviour = ((Number) person.getParameter(person.indexToParamName(population.person.RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
 
-                    if (behaviour != RelationshipPerson_MSM.BEHAV_REG_ONLY) {
-                        int[] casualRec = person.getCasualRecord();
+                    if (behaviour != population.person.RelationshipPerson_MSM.BEHAV_REG_ONLY) {
+                        int[] casualRec = ((population.person.RelationshipPerson_MSM) person).getCasualRecord();
                         int numCasual = 0;
                         for (int i = 0; i < casualRec.length; i++) {
                             numCasual += (casualRec[i] != 0) ? 1 : 0;
@@ -1127,7 +1189,7 @@ public class SinglePopRunnable implements Runnable {
 
     }
 
-    protected static boolean hasNewStrain(RelationshipPerson_MSM p) {
+    protected static boolean hasNewStrain(MultiSiteMultiStrainPersonInterface p) {
         int[] strainStat = p.getCurrentStrainsAtSite();
         boolean hasNewStrain = false;
         for (int i = 0; i < strainStat.length; i++) {
@@ -1144,24 +1206,27 @@ public class SinglePopRunnable implements Runnable {
                 int strainId = (int) ent[STRAIN_INTRO_ENTRY_STRAIN_NUM];
                 int site = (int) ent[STRAIN_INTRO_ENTRY_SITE];
                 int numInfect = (int) ent[STRAIN_INTRO_ENTRY_NUM_INF];
-                
+
                 int behavior = -1;
-                
-                if(STRAIN_INTRO_ENTRY_BEHAVOR <ent.length ){
-                    behavior = (int) ent[STRAIN_INTRO_ENTRY_BEHAVOR];                    
-                }                
+
+                if (STRAIN_INTRO_ENTRY_BEHAVOR < ent.length) {
+                    behavior = (int) ent[STRAIN_INTRO_ENTRY_BEHAVOR];
+                }
 
                 ArrayList<AbstractIndividualInterface> candidate = new ArrayList<>();
 
                 for (AbstractIndividualInterface p : getPopulation().getPop()) {
-                    boolean validCandidate = p.getInfectionStatus()[site] != AbstractIndividualInterface.INFECT_S 
+                    boolean validCandidate = p.getInfectionStatus()[site] != AbstractIndividualInterface.INFECT_S
                             && p.getTimeUntilNextStage(site) > 1;
-                    
-                    
-                    validCandidate &= (behavior < 0) ||                                                         
-                            behavior == ((Number) p.getParameter(
-                                    ((RelationshipPerson) p).indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
-                    
+
+                    if (p instanceof population.person.RelationshipPerson_MSM) {
+
+                        validCandidate &= (behavior < 0)
+                                || behavior == ((Number) p.getParameter(
+                                        ((RelationshipPerson) p).indexToParamName(
+                                                population.person.RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+                    }
+
                     if (validCandidate) {
                         if (p instanceof MultiSiteMultiStrainPersonInterface) {
                             int strain = ((MultiSiteMultiStrainPersonInterface) p).getCurrentStrainsAtSite()[site];
@@ -1173,17 +1238,17 @@ public class SinglePopRunnable implements Runnable {
                 }
 
                 int numNewInfected = Math.min(numInfect, candidate.size());
-                
-                if(numNewInfected ==0){
-                    showStrStatus("S" + getId() + " Warning: No valid candidate for imporation");                    
+
+                if (numNewInfected == 0) {
+                    showStrStatus("S" + getId() + " Warning: No valid candidate for imporation");
                 }
-                
-                
+
+                random.RandomGenerator candidSelRNG = new random.MersenneTwisterRandomGenerator(getPopulation().getInfList()[site].getRNG().nextInt());
                 AbstractIndividualInterface[] canArr = candidate.toArray(new AbstractIndividualInterface[candidate.size()]);
 
                 for (int i = 0; i < canArr.length && numNewInfected > 0; i++) {
-                    if (getPopulation().getInfList()[site].getRNG().nextInt(canArr.length - i) < numNewInfected) {
-                        
+                    if (candidSelRNG.nextInt(canArr.length - i) < numNewInfected) {
+
                         ((MultiSiteMultiStrainPersonInterface) canArr[i]).setCurrentStrainAtSite(site, 1 << strainId);
                         numNewInfected--;
 
@@ -1192,14 +1257,8 @@ public class SinglePopRunnable implements Runnable {
 
                         if (use_patient_zero && patient_zero == null) {
 
-                            HashMap<Integer, RelationshipPerson_MSM> mapping = new HashMap<>();
-                            for (AbstractIndividualInterface person : pop.getPop()) {
-                                RelationshipPerson_MSM p = (RelationshipPerson_MSM) person;
-                                mapping.put(p.getId(), p);
-                            }
-
                             // Set survival analysis                            
-                            patient_zero = (RelationshipPerson_MSM) canArr[i];
+                            patient_zero = (RelationshipPerson) canArr[i];
                             patient_zero_start_time = pop.getGlobalTime();
                             patient_zero_partners_past_strain = new HashMap<>();
                             patient_zero_partners_record = new HashMap<>();
@@ -1212,12 +1271,12 @@ public class SinglePopRunnable implements Runnable {
                                     for (SingleRelationship rel1 : relArr) {
                                         int[] partners = rel1.getLinksValues();
 
-                                        RelationshipPerson_MSM partner;
+                                        RelationshipPerson partner;
 
                                         if (patient_zero.getId() == partners[0]) {
-                                            partner = mapping.get(partners[1]);
+                                            partner = (RelationshipPerson) pop.getPersonById(partners[1]);
                                         } else {
-                                            partner = mapping.get(partners[0]);
+                                            partner = (RelationshipPerson) pop.getPersonById(partners[0]);
                                         }
 
                                         int[] mapEnt = Arrays.copyOf(partner.getCurrentStrainsAtSite(),
@@ -1229,8 +1288,12 @@ public class SinglePopRunnable implements Runnable {
                                         totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_START_TIME] = -pop.getGlobalTime(); // - negative -> start before this
                                         totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_RELATIONSHIP_LASTED_FOR] = 0;
                                         totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_TYPE] = r;
-                                        totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_BEHAVIOR]
-                                                = ((Number) partner.getParameter(partner.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+
+                                        if (partner instanceof population.person.RelationshipPerson_MSM) {
+                                            totalCollectionEnt[PATIENT_ZERO_PARNTER_REC_BEHAVIOR]
+                                                    = ((Number) partner.getParameter(partner.indexToParamName(
+                                                            population.person.RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
+                                        }
 
                                         patient_zero_partners_record.put(partner.getId(), totalCollectionEnt);
 
