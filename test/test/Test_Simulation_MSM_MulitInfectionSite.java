@@ -14,7 +14,7 @@ public class Test_Simulation_MSM_MulitInfectionSite {
             //"Import_1_BaseModel_Test",
             //"Import_1_No_Treatment_R",
             //"Import_1_50Eff_Treatment_R"                       
-            "Import_1_No_Treatment_R_B2",   
+            //"Import_1_No_Treatment_R_B2",   
             "Import_1_No_Treatment_R_B1",
             "Import_1_No_Treatment_R_B0",
             //"Optim_7M",               

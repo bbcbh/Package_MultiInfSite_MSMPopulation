@@ -631,6 +631,18 @@ public class Simulation_MSM_Population implements SimulationInterface {
             StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_END_NUM_INF]), simSoFar);
             StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EXTINCT_AT]), simSoFar);
 
+            // Zipping all export file
+            File[] exportDirs = baseDir.listFiles(new FileFilter() {
+                @Override
+                public boolean accept(File file) {
+                    return file.isDirectory() && file.getName().startsWith(EXPORT_PREFIX);
+                }
+            });
+
+            for (File dir : exportDirs) {
+                util.FileZipper.zipFile(dir, new File(baseDir, dir.getName() + ".zip"));
+            }
+
         } catch (ClassNotFoundException ex) {
             System.err.println(getClass().getName() + ".generateOneResultSet: Error - corrupted data file");
         }
@@ -711,7 +723,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     }
                 }
                 pri_strainCompositionStat.println();
-                
 
             }
 

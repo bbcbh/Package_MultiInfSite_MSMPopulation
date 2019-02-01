@@ -114,8 +114,8 @@ public class SinglePopRunnable implements Runnable {
     public static final int PATIENT_ZERO_PARNTER_REC_BEHAVIOR = PATIENT_ZERO_PARNTER_REC_TYPE + 1;
     public static final int LENGTH_PATIENT_ZERO_PARNTER_REC = PATIENT_ZERO_PARNTER_REC_BEHAVIOR + 1;
 
-    ArrayList<int[]> patient_zero_newStrainSpreadSummary = new ArrayList(); // time, patient_zero_id, patient_zero_strain_stat, target_id, targer_strain_stat, relationship_type    
-
+    ArrayList<int[]> patient_zero_newStrainSpreadSummary = new ArrayList(); 
+    
     public void set_patient_zero(boolean tsa_patient_zero) {
         this.use_patient_zero = tsa_patient_zero;
     }
@@ -1107,11 +1107,12 @@ public class SinglePopRunnable implements Runnable {
                                 wri.print(',');
                                 wri.print(ent[i]);
                             }
+                            wri.println();
                         }
                         wri.println();
                     }
 
-                    wri.println("Time, Patient_zero_id, Patient_zero_strain_stat,,,Target_id, Targer_strain_stat,,,Relationship_Type");
+                    wri.println("Time,Relationship_Type,Patient_zero_id,Patient_zero_age,Patient_zero_strain_stat,,,Target_id,Target_age,Targer_strain_stat,,,");
                     for (int[] ent : patient_zero_newStrainSpreadSummary) {
                         for (int i = 0; i < ent.length; i++) {
                             if (i != 0) {
