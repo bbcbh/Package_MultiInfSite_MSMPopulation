@@ -13,24 +13,30 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-
-/**
- *
- * @author bbcbh
- */
-public class Test_SubAnalysis_Abstract {
+public class Test_SubAnalysis_STI_World_Congress_Abstract {
 
     public static void main(String[] arg) throws IOException {
-        File baseDir = new File("C:\\Users\\bbcbh\\Downloads\\B2");
+        File baseDir = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test\\Import_1_No_Treatment_R_B2");
 
+        File strainCompositionRangeCSV = new File(baseDir, "strainCompositionActiveRange.csv");
         File newStrainExtinctCSV = new File(baseDir, "snapCount.obj_newStrainExinctAtSnapshot.csv");
         File popSnapDir = new File(baseDir, "export_7920");
         File newStrainDir = new File(baseDir, "newStrainSpread");
 
-        int[] PERSIST_RANGE = new int[]{2, 4};
+        int[] PERSIST_RANGE = new int[]{180, 360}; // In days
         int[] GROUPING_CASUSAL_PARNTERS = new int[]{0, 4, 9, 19, 39};
 
-        int[][] matrix_persist = readCSVFile(newStrainExtinctCSV, 0);
+        boolean useStrainCompositionRangeCSV = strainCompositionRangeCSV.exists();
+
+        int[][] matrix_persist;
+
+        if (useStrainCompositionRangeCSV) {
+            matrix_persist = readCSVFile(strainCompositionRangeCSV, 0);
+        } else {
+            // Old method
+            matrix_persist = readCSVFile(newStrainExtinctCSV, 0);
+        }
+
         int numSimTotal = popSnapDir.listFiles(new FileFilter() {
             @Override
             public boolean accept(File pathname) {
@@ -75,7 +81,6 @@ public class Test_SubAnalysis_Abstract {
                 while ((line = r.readLine()) != null) {
                     if (partnerEntNext) {
                         do {
-
                             String[] ent = line.split(",");
                             if (ent[3].equals("0")) {
                                 regPartnerRec.put(Integer.parseInt(ent[0]), new int[0]);
@@ -109,9 +114,22 @@ public class Test_SubAnalysis_Abstract {
                     cPt = -(cPt + 1);
                 }
 
+                int persistInDays;
+
+                if (useStrainCompositionRangeCSV) {
+                    if (persistUpTo[persistUpTo.length - 1] > 0) {
+                        persistInDays = Math.max(persistUpTo[persistUpTo.length - 1] 
+                                - persistUpTo[persistUpTo.length - 2], 0);
+                    } else {
+                        persistInDays = Integer.MAX_VALUE;
+                    }
+                } else {
+                    persistInDays = persistUpTo[1] * 90; // By snapshot frequency
+                }
+
                 for (int rangePt = 0; rangePt < PERSIST_RANGE.length; rangePt++) {
                     index_stat[rangePt][cPt][1]++;
-                    if (persistUpTo[1] > PERSIST_RANGE[rangePt]) {
+                    if (persistInDays > PERSIST_RANGE[rangePt]) {
                         index_stat[rangePt][cPt][0]++;
                     }
                 }
@@ -140,7 +158,7 @@ public class Test_SubAnalysis_Abstract {
         for (int rangePt = 0; rangePt < PERSIST_RANGE.length; rangePt++) {
 
             int[][] statEnt = index_stat[rangePt];
-            System.out.println("Persist > " + (PERSIST_RANGE[rangePt] / 4.0f));
+            System.out.println("Persist > " + (PERSIST_RANGE[rangePt]));
 
             for (int cPt = 0; cPt < statEnt.length; cPt++) {
                 if (cPt < GROUPING_CASUSAL_PARNTERS.length) {
@@ -156,7 +174,7 @@ public class Test_SubAnalysis_Abstract {
             }
 
             System.out.println("Reg stat");
-            System.out.println("Persist > " + (PERSIST_RANGE[rangePt] / 4.0f));
+            System.out.println("Persist > " + (PERSIST_RANGE[rangePt]));
 
             statEnt = index_partner_stat[rangePt];
             for (int cPt = 0; cPt < statEnt.length; cPt++) {

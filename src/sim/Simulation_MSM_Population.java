@@ -67,6 +67,8 @@ import util.runnable.ExtractFieldRunnable;
  *  - Add support for survival analysis
  * 20190123
  *  - Add support for skip range and output print
+ * 20190204
+ *  - Add zipping function for folders generated during simulation 
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
@@ -631,17 +633,19 @@ public class Simulation_MSM_Population implements SimulationInterface {
             StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_END_NUM_INF]), simSoFar);
             StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EXTINCT_AT]), simSoFar);
 
-            // Zipping all export file
+            // Zipping all directory
             File[] exportDirs = baseDir.listFiles(new FileFilter() {
                 @Override
                 public boolean accept(File file) {
-                    return file.isDirectory() && file.getName().startsWith(EXPORT_PREFIX);
+                    return file.isDirectory();
                 }
             });
 
             for (File dir : exportDirs) {
                 util.FileZipper.zipFile(dir, new File(baseDir, dir.getName() + ".zip"));
             }
+            
+            
 
         } catch (ClassNotFoundException ex) {
             System.err.println(getClass().getName() + ".generateOneResultSet: Error - corrupted data file");
