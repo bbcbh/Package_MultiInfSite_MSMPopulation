@@ -56,8 +56,13 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
 
         defaultProbVal = sim.getPropVal();
         defaultModelInit = sim.getPropModelInit();
-
     }
+    
+    public Residual_Func_TranProb_NumInfFit(Abstract_Optimisation_MSM src, int numSim_forced, int numThread_forced) throws IOException {        
+        this(src);
+        this.NUM_SIM = numSim_forced;
+        this.NUM_THREAD = numThread_forced;
+    }       
 
     @Override
     public double[] generateResidual(double[] param) {
@@ -91,6 +96,8 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
             runnable[r] = new SinglePopRunnable(r, ((Number) propVal[PROP_NUM_SNAP]).intValue(),
                     ((Number) propVal[PROP_SNAP_FREQ]).intValue());
             runnable[r].setPopulation(new MSMPopulation(seed[r]));
+            runnable[r].setPrintPrevalence(false);
+            runnable[r].setProgressSupport(new PropertyChangeSupport(runnable[r])); // Null response
 
             String[] model_init_val = Arrays.copyOf(defaultModelInit, defaultModelInit.length);
 
@@ -199,6 +206,8 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
                 res[i] += ((runInfected[r][i] - src.getNUM_INF_TARGET()[i]) * src.getFITTING_WEIGHT()[i]) / runnable.length;
             }
         }
+        
+        System.out.println("P = " + Arrays.toString(param) + " R = " + Arrays.toString(res));
 
         return res;
 

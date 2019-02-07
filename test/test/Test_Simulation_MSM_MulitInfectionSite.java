@@ -17,7 +17,7 @@ public class Test_Simulation_MSM_MulitInfectionSite {
             //"Import_1_No_Treatment_R_B2",   
             //"Import_1_No_Treatment_R_B1",
             //"Import_1_No_Treatment_R_B0",
-            "Optim_7M",               
+            "Optim_CLG",               
             //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\1000 Runs",                
         };        
        

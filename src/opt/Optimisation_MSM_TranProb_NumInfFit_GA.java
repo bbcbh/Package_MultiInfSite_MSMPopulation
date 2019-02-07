@@ -34,7 +34,8 @@ public class Optimisation_MSM_TranProb_NumInfFit_GA extends Abstract_Optimisatio
         AbstractResidualFunc optimisationFunc;
 
         constraints = initaliseContriants();
-        optimisationFunc = new Residual_Func_TranProb_NumInfFit(this);
+        optimisationFunc = new Residual_Func_TranProb_NumInfFit(this,1,1); // Using 1 threads per parameter sample                
+        
         AbstractParameterOptimiser opt = new GeneticAlgorithmOptimiser(optimisationFunc);
 
         File parentDir = this.getBaseDir();
@@ -43,7 +44,7 @@ public class Optimisation_MSM_TranProb_NumInfFit_GA extends Abstract_Optimisatio
         opt.setFilename(parentDir.getAbsolutePath() + File.separator + FILENAME_OPT_RESULTS_CSV, AbstractParameterOptimiser.FILEPATH_CSV);
         opt.setFilename(parentDir.getAbsolutePath() + File.separator + FILENAME_OPT_RESULTS_OBJ, AbstractParameterOptimiser.FILEPATH_OBJ);
         opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_OPT_POP_FILE, new File(parentDir, FILENAME_OPT_GA_STORE));
-        opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_OPT_USE_PARALLEL, Runtime.getRuntime().availableProcessors());
+        opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_OPT_USE_PARALLEL, NUM_THREAD);
         opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_OPT_POP_SIZE, POOL_SIZE);
         opt.setResOptions(false, AbstractParameterOptimiser.RES_OPTIONS_PRINT);
 
