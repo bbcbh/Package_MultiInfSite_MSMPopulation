@@ -25,7 +25,7 @@ public class Optimisation_MSM_TranProb_NumInfFit_GA extends Abstract_Optimisatio
 
     public Optimisation_MSM_TranProb_NumInfFit_GA(String[] arg) {
         super(arg);
-        POOL_SIZE = Runtime.getRuntime().availableProcessors() * NUM_THREAD * NUM_SIM;        
+        POOL_SIZE = NUM_THREAD * NUM_SIM;        
     }
 
     @Override

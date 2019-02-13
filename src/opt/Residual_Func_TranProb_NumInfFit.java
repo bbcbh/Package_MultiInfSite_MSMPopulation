@@ -207,7 +207,7 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
             }
         }
         
-        System.out.println("P = " + Arrays.toString(param) + " R = " + Arrays.toString(res));
+        // System.out.println("P = " + Arrays.toString(param) + " R = " + Arrays.toString(res));
 
         return res;
 

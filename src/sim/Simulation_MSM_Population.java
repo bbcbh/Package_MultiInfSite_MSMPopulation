@@ -79,7 +79,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
         "PROP_MSM_SKIP_THREAD_RANGE",};
 
     public static final Class[] PROP_CLASS_MSM_MIS = {
-        float[][].class, // float[]{globaltime, strainNum, site, likelihood to co-exist, number of infection to introduce, frequency (optional) }
+        float[][].class, // float[]{globaltime, strainNum, site, number of infection to introduce, frequency (optional), candidate behavior }
         float[][].class, // float[exist_strain][new_strain]{likelihood to coexist}
         Integer.class, // 0 (default) = simulation, 1 = optimisation
         String.class, // For optimisation infection targer      
