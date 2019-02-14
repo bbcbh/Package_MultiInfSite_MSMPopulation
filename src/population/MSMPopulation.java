@@ -86,6 +86,9 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * <p>
  * 20190115 - Add support for population based distribution for casual partnership
  * </p>
+ * <p>
+ * 20190115 - Add alterate screening set format for target screening. Remove requirement on last unprotected anal sex
+ * </p>
  */
 public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
@@ -211,10 +214,17 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         public int classifyPerson(AbstractIndividualInterface p) {
             if (p instanceof RelationshipPerson_MSM) {
                 // From STIGMA guideline
-                int lastUnprotectAnalSex = (int) p.getParameter("PARAM_LAST_UNPROTECTED_ANAL_SEX_AT_AGE");
-                int lastScreenAtAge = (int) p.getParameter("PARAM_LAST_SCREEN_AT_AGE");
-                int numCasualPartnerInLast6Months = (int) p.getParameter("PARAM_NUM_CASUAL_IN_LAST_6_MONTHS");
-                return (numCasualPartnerInLast6Months >= 10 || lastUnprotectAnalSex > lastScreenAtAge) ? 0 : -1;
+                //int lastUnprotectAnalSex = (int) p.getParameter("PARAM_LAST_UNPROTECTED_ANAL_SEX_AT_AGE");
+                //int lastScreenAtAge = (int) p.getParameter("PARAM_LAST_SCREEN_AT_AGE");
+                //int numCasualPartnerInLast6Months = (int) p.getParameter("PARAM_NUM_CASUAL_IN_LAST_6_MONTHS");
+
+                int[] casualRec = ((RelationshipPerson_MSM) p).getCasualRecord();
+                int numCasual = 0;
+                for (int i = 0; i < casualRec.length; i++) {
+                    numCasual += (casualRec[i] != 0) ? 1 : 0;
+                }
+
+                return (numCasual >= 10) ? 0 : -1;
 
             } else {
                 return -1;
@@ -545,25 +555,56 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 // Rescreening 
                 screenedToday = person.getParameter("PARAM_SCHEDULED_SCREEN_AT_AGE").equals(person.getAge());
 
+                int screenTypeStartIndex = 3;
+
                 if (!screenedToday) {
                     // Targeted screening                    
+
                     if (targetedScreenClassifier.classifyPerson(person) >= 0
                             && ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[1] > 0) {
-                        screenedToday = getRNG().nextFloat() < ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[1];
+
+                        float srnTodayProb = ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[1];
+
+                        if (srnTodayProb > 1) {
+                            // Multi class option
+                            int numClass = (int) srnTodayProb;
+                            screenTypeStartIndex += numClass * 2;
+                            float classFloat = getRNG().nextFloat();
+
+                            int pt = Arrays.binarySearch((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED], 2, 2 + numClass, classFloat);
+
+                            if (pt <= 0) {
+                                pt = -(pt + 1);
+                            }
+
+                            if (pt < 2 + numClass) {
+                                int probPt = pt + numClass;
+
+                                srnTodayProb = ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[probPt];
+                            } else {
+                                srnTodayProb = 0;
+                            }
+
+                        }
+
+                        if (srnTodayProb > 0) {
+                            screenedToday = getRNG().nextFloat() < srnTodayProb;
+                        }
+
                     }
                 }
 
                 if (screenedToday) {
                     int screeningType = 0b111;
 
-                    if (((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED]).length > 3) {
+                    if (((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED]).length > screenTypeStartIndex) {
                         screeningType = 0;
                         float pScrType = getRNG().nextFloat();
-                        while (pScrType >= ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[screeningType + 3]) {
+                        while (pScrType >= ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[screeningType + screenTypeStartIndex]) {
                             screeningType++;
                         }
                     }
-                    screenPerson((RelationshipPerson_MSM) person, screeningType);
+                    screenPerson((RelationshipPerson_MSM) person, screeningType+1);
                 }
             }
 
@@ -670,7 +711,13 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         }
         if (foundInfection) {
 
-            float pRepeat = ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[2];
+            int reIndex = 2;
+            float pRepeat;
+            if (((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[1] > 1) {
+                reIndex += ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[1] * 2;
+            }
+
+            pRepeat = ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[reIndex];
 
             if (pRepeat > 0 && getRNG().nextFloat() < pRepeat) {
                 msm.setParameter("PARAM_SCHEDULED_SCREEN_AT_AGE", msm.getAge() + 3 * 30);
@@ -1087,13 +1134,6 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         int dur;
         float[][] actFreq;
         if (mapType == MAPPING_REG) {
-
-            for (int p = 0; p < pair.length; p++) {
-                if (relMap.containsVertex(pair[p].getId())
-                        && relMap.degreeOf(pair[p].getId()) > 1) {
-                    System.out.println("Err");
-                }
-            }
 
             double regPartLength = ((Number) getFields()[MSM_REG_LENTH_AVE]).doubleValue();
             AbstractRealDistribution regLength;
