@@ -68,7 +68,7 @@ import util.runnable.ExtractFieldRunnable;
  * 20190123
  *  - Add support for skip range and output print
  * 20190204
- *  - Add zipping function for folders generated during simulation 
+ *  - Add zipping function for folders generated during simulation
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
@@ -644,8 +644,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
             for (File dir : exportDirs) {
                 util.FileZipper.zipFile(dir, new File(baseDir, dir.getName() + ".zip"));
             }
-            
-            
 
         } catch (ClassNotFoundException ex) {
             System.err.println(getClass().getName() + ".generateOneResultSet: Error - corrupted data file");
@@ -1097,11 +1095,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     }
 
-    public static void decodeExportedPopulationFiles(File baseDir) throws IOException, ClassNotFoundException {
-        decodeExportedPopulationFiles(baseDir, new int[]{0, Integer.MAX_VALUE});
+    public static void decodeExportedPopulationFiles(File baseDir, String[] specific_dir)
+            throws IOException, ClassNotFoundException {
+        decodeExportedPopulationFiles(baseDir, new int[]{0, Integer.MAX_VALUE}, specific_dir);
     }
 
-    public static void decodeExportedPopulationFiles(File baseDir, int[] range) throws IOException, ClassNotFoundException {
+    public static void decodeExportedPopulationFiles(File baseDir, int[] popId_range, String[] specific_dir)
+            throws IOException, ClassNotFoundException {
 
         File[] exportFolders = baseDir.listFiles(new FileFilter() {
             @Override
@@ -1110,39 +1110,30 @@ public class Simulation_MSM_Population implements SimulationInterface {
             }
         });
 
+        if (specific_dir != null) {
+            exportFolders = new File[specific_dir.length];
+            for (int i = 0; i < exportFolders.length; i++) {
+                exportFolders[i] = new File(baseDir, specific_dir[i]);
+
+                if (!exportFolders[i].exists() || !exportFolders[i].isDirectory()) {
+                    System.err.println("decodeExportedPopulationFiles: Ill-formed export folder at "
+                            + exportFolders[i].getAbsolutePath());
+                    exportFolders[i] = null;
+                }
+
+            }
+        }
+
         for (File exportDir : exportFolders) {
 
-            File[] popFiles;
+            if (exportDir != null) {
 
-            popFiles = exportDir.listFiles(new FileFilter() {
-                @Override
-                public boolean accept(File file) {
-                    Matcher m = Pattern_popStat.matcher(file.getName());
-                    return m.find();
-                }
-            });
-
-            Arrays.sort(popFiles, new Comparator<File>() {
-                @Override
-                public int compare(File f1, File f2) {
-                    Matcher m1 = Pattern_popStat.matcher(f1.getName());
-                    Matcher m2 = Pattern_popStat.matcher(f2.getName());
-                    m1.find();
-                    m2.find();
-                    Integer n1 = new Integer(m1.group(1));
-                    Integer n2 = new Integer(m2.group(1));
-                    return n1.compareTo(n2);
-                }
-            });
-
-            if (popFiles.length == 0) {
-
-                System.out.println("Pop snap shot files not found. Retry using popFile instead.");
+                File[] popFiles;
 
                 popFiles = exportDir.listFiles(new FileFilter() {
                     @Override
                     public boolean accept(File file) {
-                        Matcher m = Pattern_importFile.matcher(file.getName());
+                        Matcher m = Pattern_popStat.matcher(file.getName());
                         return m.find();
                     }
                 });
@@ -1150,8 +1141,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 Arrays.sort(popFiles, new Comparator<File>() {
                     @Override
                     public int compare(File f1, File f2) {
-                        Matcher m1 = Pattern_importFile.matcher(f1.getName());
-                        Matcher m2 = Pattern_importFile.matcher(f2.getName());
+                        Matcher m1 = Pattern_popStat.matcher(f1.getName());
+                        Matcher m2 = Pattern_popStat.matcher(f2.getName());
                         m1.find();
                         m2.find();
                         Integer n1 = new Integer(m1.group(1));
@@ -1160,93 +1151,119 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     }
                 });
 
-            }
+                if (popFiles.length == 0) {
 
-            System.out.println("Analysing " + popFiles.length + " pop file"
-                    + (popFiles.length == 1 ? "" : "s") + " at " + exportDir.getAbsolutePath());
+                    System.out.println("Pop snap shot files not found. Retry using popFile instead.");
 
-            boolean[] prePrintExist = new boolean[FILE_NAMES_CSV.length];
+                    popFiles = exportDir.listFiles(new FileFilter() {
+                        @Override
+                        public boolean accept(File file) {
+                            Matcher m = Pattern_importFile.matcher(file.getName());
+                            return m.find();
+                        }
+                    });
 
-            for (int i = 0; i < prePrintExist.length; i++) {
-                prePrintExist[i] = new File(exportDir, FILE_NAMES_CSV[i]).exists();
-            }
+                    Arrays.sort(popFiles, new Comparator<File>() {
+                        @Override
+                        public int compare(File f1, File f2) {
+                            Matcher m1 = Pattern_importFile.matcher(f1.getName());
+                            Matcher m2 = Pattern_importFile.matcher(f2.getName());
+                            m1.find();
+                            m2.find();
+                            Integer n1 = new Integer(m1.group(1));
+                            Integer n2 = new Integer(m2.group(1));
+                            return n1.compareTo(n2);
+                        }
+                    });
 
-            PrintWriter pri_inf_stat = new PrintWriter(
-                    new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_INFECTION_STAT_CSV]), true));
-
-            if (!prePrintExist[FILE_INFECTION_STAT_CSV]) {
-                pri_inf_stat.println(Callable_decodeExportPop.inf_stat_header);
-            }
-
-            PrintWriter pri_numPartnerLast6Months = new PrintWriter(
-                    new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]), true));
-
-            if (!prePrintExist[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]) {
-                pri_numPartnerLast6Months.println("Sim, Num casual partners in last 6 months, Freq, Freq (infected), Freq (new strain)");
-            }
-
-            PrintWriter pri_newStrainHasRegPartner = new PrintWriter(
-                    new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NEW_STRAIN_HAS_REG_PARTNERS]), true));
-            if (!prePrintExist[FILE_NEW_STRAIN_HAS_REG_PARTNERS]) {
-                pri_newStrainHasRegPartner.println("Sim, Num of Reg for those with new strain");
-            }
-
-            PrintWriter[] writers = new PrintWriter[]{pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner};
-
-            ExecutorService threadpool = null;
-            int inThreadPool = 0;
-            java.util.concurrent.Future<int[][]>[] result_Map = new java.util.concurrent.Future[popFiles.length];
-            int exportedSoFar = 0;
-            int THREAD_POOLSIZE = Runtime.getRuntime().availableProcessors();
-
-            for (File popFile : popFiles) {
-                Pattern p;
-                if (Pattern_popStat.matcher(popFile.getName()).matches()) {
-                    p = Pattern_popStat;
-                } else {
-                    p = Pattern_importFile;
                 }
-                Matcher m = p.matcher(popFile.getName());
-                m.find();
-                int popId = new Integer(m.group(1));
 
-                if (!prePrintExist[FILE_INFECTION_STAT_CSV]
-                        || popId >= range[0] && popId < range[1]) {
+                System.out.println("Analysing " + popFiles.length + " pop file"
+                        + (popFiles.length == 1 ? "" : "s") + " at " + exportDir.getAbsolutePath());
 
-                    System.out.println("Submitting thread to analysis pop file " + popFile.getName());
+                boolean[] prePrintExist = new boolean[FILE_NAMES_CSV.length];
 
-                    if (threadpool == null) {
-                        threadpool = Executors.newFixedThreadPool(THREAD_POOLSIZE);
-                        inThreadPool = 0;
-                    }
-
-                    Callable_decodeExportPop thread = new Callable_decodeExportPop(popFile, exportDir, p);
-                    result_Map[popId] = threadpool.submit(thread);
-                    inThreadPool++;
-
-                    if (inThreadPool == THREAD_POOLSIZE) {
-                        exportedSoFar = exeutePopDecodeThread(threadpool, exportedSoFar,
-                                result_Map, writers);
-
-                        threadpool = null;
-                        inThreadPool = 0;
-                    }
-
-                } else {
-                    System.out.println("Analysing pop file " + popFile.getName() + " skipped.");
+                for (int i = 0; i < prePrintExist.length; i++) {
+                    prePrintExist[i] = new File(exportDir, FILE_NAMES_CSV[i]).exists();
                 }
-            }
-            if (inThreadPool > 0) {
-                exportedSoFar = exeutePopDecodeThread(threadpool, exportedSoFar,
-                        result_Map, writers);
-                threadpool = null;
-                inThreadPool = 0;
-            }
 
-            for (PrintWriter writer : writers) {
-                writer.close();
-            }
+                PrintWriter pri_inf_stat = new PrintWriter(
+                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_INFECTION_STAT_CSV]), true));
 
+                if (!prePrintExist[FILE_INFECTION_STAT_CSV]) {
+                    pri_inf_stat.println(Callable_decodeExportPop.inf_stat_header);
+                }
+
+                PrintWriter pri_numPartnerLast6Months = new PrintWriter(
+                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]), true));
+
+                if (!prePrintExist[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]) {
+                    pri_numPartnerLast6Months.println("Sim, Num casual partners in last 6 months, Freq, Freq (infected), Freq (new strain)");
+                }
+
+                PrintWriter pri_newStrainHasRegPartner = new PrintWriter(
+                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NEW_STRAIN_HAS_REG_PARTNERS]), true));
+                if (!prePrintExist[FILE_NEW_STRAIN_HAS_REG_PARTNERS]) {
+                    pri_newStrainHasRegPartner.println("Sim, Num of Reg for those with new strain");
+                }
+
+                PrintWriter[] writers = new PrintWriter[]{pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner};
+
+                ExecutorService threadpool = null;
+                int inThreadPool = 0;
+                java.util.concurrent.Future<int[][]>[] result_Map = new java.util.concurrent.Future[popFiles.length];
+                int exportedSoFar = 0;
+                int THREAD_POOLSIZE = Runtime.getRuntime().availableProcessors();
+
+                for (File popFile : popFiles) {
+                    Pattern p;
+                    if (Pattern_popStat.matcher(popFile.getName()).matches()) {
+                        p = Pattern_popStat;
+                    } else {
+                        p = Pattern_importFile;
+                    }
+                    Matcher m = p.matcher(popFile.getName());
+                    m.find();
+                    int popId = new Integer(m.group(1));
+
+                    if (!prePrintExist[FILE_INFECTION_STAT_CSV]
+                            || popId >= popId_range[0] && popId < popId_range[1]) {
+
+                        System.out.println("Submitting thread to analysis pop file " + popFile.getName());
+
+                        if (threadpool == null) {
+                            threadpool = Executors.newFixedThreadPool(THREAD_POOLSIZE);
+                            inThreadPool = 0;
+                        }
+
+                        Callable_decodeExportPop thread = new Callable_decodeExportPop(popFile, exportDir, p);
+                        result_Map[popId] = threadpool.submit(thread);
+                        inThreadPool++;
+
+                        if (inThreadPool == THREAD_POOLSIZE) {
+                            exportedSoFar = exeutePopDecodeThread(threadpool, exportedSoFar,
+                                    result_Map, writers);
+
+                            threadpool = null;
+                            inThreadPool = 0;
+                        }
+
+                    } else {
+                        System.out.println("Analysing pop file " + popFile.getName() + " skipped.");
+                    }
+                }
+                if (inThreadPool > 0) {
+                    exportedSoFar = exeutePopDecodeThread(threadpool, exportedSoFar,
+                            result_Map, writers);
+                    threadpool = null;
+                    inThreadPool = 0;
+                }
+
+                for (PrintWriter writer : writers) {
+                    writer.close();
+                }
+
+            }
         }
 
     }
