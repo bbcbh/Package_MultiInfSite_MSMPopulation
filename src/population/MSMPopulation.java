@@ -3,6 +3,8 @@ package population;
 import availability.AbstractAvailability;
 import infection.AbstractInfection;
 import infection.GonorrhoeaSiteInfection;
+import infection.vaccination.AbstractVaccination;
+import infection.vaccination.SiteSpecificVaccination;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -89,6 +91,9 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * <p>
  * 20190115 - Add alterate screening set format for target screening. Remove requirement on last unprotected anal sex
  * </p>
+ * <p>
+ * 20190523 - Add support for vaccination
+ * </p>
  */
 public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
@@ -122,7 +127,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int MSM_TREATMENT_EFFICIENCY = MSM_SCREENING_SETTING_TARGETED + 1;
     public static final int MSM_SYM_TREATMENT_PROB = MSM_TREATMENT_EFFICIENCY + 1;
     public static final int MSM_USE_GLOBAL_CASUAL_LIMIT = MSM_SYM_TREATMENT_PROB + 1;
-    public static final int LENGTH_FIELDS_MSM_POP = MSM_USE_GLOBAL_CASUAL_LIMIT + 1;
+    public static final int MSM_SITE_SPECIFIC_VACCINATION = MSM_USE_GLOBAL_CASUAL_LIMIT + 1;
+    public static final int LENGTH_FIELDS_MSM_POP = MSM_SITE_SPECIFIC_VACCINATION + 1;
 
     public static final Object[] DEFAULT_MSM_FIELDS = {
         // Min/max for anal and oral sex for reg (per day) and causal relationship (per partnership), from 
@@ -188,7 +194,10 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         // Phary : Assumption
         new float[]{1, 7 / 4.7f, 0},
         // Global casual limit        
-        true,};
+        true,
+        // MSM_SITE_SPECIFIC_VACCINATION
+        // A SiteSpecificVaccination object if applied
+        null,};
     public static final int[] AGE_RANGE = {(int) (16 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT),
         (int) (80 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT)
     };
@@ -482,13 +491,39 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                     relMap.removeAvailablePerson(person);
                 }
 
+                // Remove person from vaccine record
+                if (getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
+                    ((AbstractVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION]).getVaccinationRecord().remove(person.getId());
+                }
+
                 int nextId = ((Number) getFields()[FIELDS_NEXT_ID]).intValue();
 
                 RelationshipPerson_MSM newP = (RelationshipPerson_MSM) generateNewPerson(nextId, person, AGE_RANGE[0]);
 
                 getLocalData().put(p, newP);
                 person = newP;
-                getFields()[FIELDS_NEXT_ID] = new Integer(nextId + 1);
+                getFields()[FIELDS_NEXT_ID] = nextId + 1;
+
+                if (getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
+                    AbstractVaccination vacc = ((AbstractVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION]);
+
+                    if (vacc instanceof SiteSpecificVaccination) {
+                        SiteSpecificVaccination ssv = (SiteSpecificVaccination) vacc;
+                        double propVacc = ssv.getParameters()[SiteSpecificVaccination.EFFECT_INDEX_PROPORTION_VACC_ENT_POP];
+                        if (propVacc > 0) {
+                            if (propVacc < 1) {
+                                propVacc = getRNG().nextDouble() < propVacc ? 0 : 1;
+                            }
+                            if (propVacc >= 1) {
+                                ssv.vaccinatePerson(person);
+                            }
+                        }
+                    } else {
+                        System.err.println("Vaccination format for " + vacc.getClass() + " not defined");
+                    }
+
+                }
+
             }
 
             int behaviour = ((Number) person.getParameter(person.indexToParamName(RelationshipPerson_MSM.PARAM_BEHAV_TYPE_INDEX))).intValue();
@@ -604,7 +639,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                             screeningType++;
                         }
                     }
-                    screenPerson((RelationshipPerson_MSM) person, screeningType+1);
+                    screenPerson((RelationshipPerson_MSM) person, screeningType + 1);
                 }
             }
 
@@ -894,12 +929,19 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         int[][] infectStat = new int[rel.getLinks().length][];
         int[][] strainStat = new int[rel.getLinks().length][];
 
+        double[][] vaccineImpact = new double[rel.getLinks().length][];
+
         RelationshipPerson_MSM[] person = new RelationshipPerson_MSM[rel.getLinks().length];
 
         for (int p = 0; p < rel.getLinks().length; p++) {
             person[p] = (RelationshipPerson_MSM) getLocalData().get(rel.getLinks()[p].intValue());
             infectStat[p] = person[p].getInfectionStatus();
             strainStat[p] = person[p].getCurrentStrainsAtSite();
+
+            if (getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
+                SiteSpecificVaccination vacc = (SiteSpecificVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION];
+                vaccineImpact[p] = vacc.vaccineImpact(person[p], null);
+            }
 
         }
 
@@ -914,9 +956,11 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                         res[a][0] = true;
                         res[a][1] = false;
                         res[a][2] = false;
-                        double r2r = ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_KISSING][0]
+
+                        double r2r_def = ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_KISSING][0]
                                 * ((double[][]) getFields()[FIELDS_SUSCEPT])[TRAN_SUSC_INDEX_KISSING][0];
-                        boolean tranR2R = r2r > 0
+
+                        boolean tranR2R = r2r_def > 0
                                 && strainStat[0][RelationshipPerson_MSM.SITE_R] != strainStat[1][RelationshipPerson_MSM.SITE_R];
 
                         if (tranR2R) {
@@ -924,6 +968,16 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                                 if (strainStat[s][RelationshipPerson_MSM.SITE_R] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R]
                                         && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_ASY
                                         || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R] == GonorrhoeaSiteInfection.STATUS_SYM)) {
+
+                                    double r2r = r2r_def;
+
+                                    // Impact of vaccine
+                                    if (vaccineImpact[s] != null) {
+                                        r2r *= vaccineImpact[s][SiteSpecificVaccination.EFFECT_INDEX_SUSCEPTIBLE_EFFICACY_R];
+                                    }
+                                    if (vaccineImpact[(s + 1) % 2] != null) {
+                                        r2r *= vaccineImpact[(s + 1) % 2][SiteSpecificVaccination.EFFECT_INDEX_TRANMISSION_EFFICACY_R];
+                                    }
 
                                     if (r2r < 1) {
                                         tranR2R = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_R]).getRNG().nextDouble() < r2r;
@@ -951,22 +1005,36 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                         res[a][1] = false;
                         res[a][2] = false;
 
-                        double a2r = ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_RIMMING_ANAL][0]
+                        double a2r_def = ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_RIMMING_ANAL][0]
                                 * ((double[][]) getFields()[FIELDS_SUSCEPT])[TRAN_SUSC_INDEX_RIMMING_ORAL][0];
-                        double r2a = ((double[][]) getFields()[FIELDS_SUSCEPT])[TRAN_SUSC_INDEX_RIMMING_ANAL][0]
+                        double r2a_def = ((double[][]) getFields()[FIELDS_SUSCEPT])[TRAN_SUSC_INDEX_RIMMING_ANAL][0]
                                 * ((double[][]) getFields()[FIELDS_TRANSMIT])[TRAN_SUSC_INDEX_RIMMING_ORAL][0];
 
-                        boolean tranA2R = a2r > 0;
-                        boolean tranR2A = r2a > 0;
+                        boolean tranA2R = a2r_def > 0;
+                        boolean tranR2A = r2a_def > 0;
 
                         for (int s = 0; s < rel.getLinks().length; s++) {
                             boolean susR = strainStat[s][RelationshipPerson_MSM.SITE_R] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A];
                             boolean susA = strainStat[s][RelationshipPerson_MSM.SITE_A] != strainStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_R];
 
+                            double a2r = a2r_def;
+                            double r2a = r2a_def;
+
+                            // Impact of vaccine
+                            if (vaccineImpact[s] != null) {
+                                a2r *= vaccineImpact[s][SiteSpecificVaccination.EFFECT_INDEX_SUSCEPTIBLE_EFFICACY_R];
+                                r2a *= vaccineImpact[s][SiteSpecificVaccination.EFFECT_INDEX_SUSCEPTIBLE_EFFICACY_A];
+                            }
+                            if (vaccineImpact[(s + 1) % 2] != null) {
+                                a2r *= vaccineImpact[(s + 1) % 2][SiteSpecificVaccination.EFFECT_INDEX_TRANMISSION_EFFICACY_A];
+                                r2a *= vaccineImpact[(s + 1) % 2][SiteSpecificVaccination.EFFECT_INDEX_TRANMISSION_EFFICACY_R];
+                            }
+
                             // Anal to oral
                             if (tranA2R && susR
                                     && (infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_ASY
                                     || infectStat[(s + 1) % 2][RelationshipPerson_MSM.SITE_A] == GonorrhoeaSiteInfection.STATUS_SYM)) {
+
                                 if (a2r < 1) {
                                     tranA2R = ((GonorrhoeaSiteInfection) getInfList()[RelationshipPerson_MSM.SITE_A]).getRNG().nextDouble() < a2r;
                                 }
@@ -1034,6 +1102,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                         }
 
                         for (int s = 0; s < rel.getLinks().length; s++) {
+
                             if (unprotectedAct) {
                                 if (a == ACT_ANAL) {
                                     person[s].setParameter("PARAM_LAST_UNPROTECTED_ANAL_SEX_AT_AGE", person[s].getAge());
@@ -1062,6 +1131,17 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                                     if ((((int) person[s].getParameter(nonGTargetImmune)) & (1 << a)) != 0) {
                                         // E.g. Insertive to anal or oral sex
                                         tranSucProb = 0;
+                                    }
+
+                                    // Impact of vaccine
+                                    if (vaccineImpact[s] != null) {
+                                        int eff_tar = nonGTarget == RelationshipPerson_MSM.SITE_A
+                                                ? SiteSpecificVaccination.EFFECT_INDEX_SUSCEPTIBLE_EFFICACY_A
+                                                : SiteSpecificVaccination.EFFECT_INDEX_SUSCEPTIBLE_EFFICACY_R;
+                                        tranSucProb *= vaccineImpact[s][eff_tar];
+                                    }
+                                    if (vaccineImpact[(s + 1) % 2] != null) {
+                                        tranSucProb *= vaccineImpact[(s + 1) % 2][SiteSpecificVaccination.EFFECT_INDEX_TRANMISSION_EFFICACY_G];
                                     }
 
                                     boolean g2NG = tranSucProb > 0;
@@ -1098,6 +1178,17 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                                     if ((((int) person[s].getParameter("PARAM_IMMUNE_ACT_SITE_G")) & (1 << a)) != 0) {
                                         // Eg. Receptive to anal or oral sex
                                         tranSucProb = 0;
+                                    }
+
+                                    // Impact of vaccine
+                                    if (vaccineImpact[s] != null) {
+                                        tranSucProb *= vaccineImpact[s][SiteSpecificVaccination.EFFECT_INDEX_SUSCEPTIBLE_EFFICACY_G];
+                                    }
+                                    if (vaccineImpact[(s + 1) % 2] != null) {
+                                        int eff_tar = nonGTarget == RelationshipPerson_MSM.SITE_A
+                                                ? SiteSpecificVaccination.EFFECT_INDEX_TRANMISSION_EFFICACY_A
+                                                : SiteSpecificVaccination.EFFECT_INDEX_TRANMISSION_EFFICACY_R;
+                                        tranSucProb *= vaccineImpact[(s + 1) % 2][eff_tar];
                                     }
 
                                     boolean nG2G = tranSucProb > 0;

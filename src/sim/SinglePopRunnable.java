@@ -21,6 +21,7 @@ import util.FileZipper;
 import util.PersonClassifier;
 import util.StaticMethods;
 import infection.MultiStrainInfectionInterface;
+import infection.vaccination.SiteSpecificVaccination;
 import population.person.MultiSiteMultiStrainPersonInterface;
 import population.person.RelationshipPerson;
 import relationship.SingleRelationship;
@@ -52,6 +53,8 @@ import relationship.SingleRelationship;
  *  - Add behavior option for intro at
  * 20190127
  *  - Create a new RNG for selecting candidate within introStrain
+ * 20190523
+ *  - Add support for vaccine setting
  * </pre>
  *
  */
@@ -114,8 +117,18 @@ public class SinglePopRunnable implements Runnable {
     public static final int PATIENT_ZERO_PARNTER_REC_BEHAVIOR = PATIENT_ZERO_PARNTER_REC_TYPE + 1;
     public static final int LENGTH_PATIENT_ZERO_PARNTER_REC = PATIENT_ZERO_PARNTER_REC_BEHAVIOR + 1;
 
-    ArrayList<int[]> patient_zero_newStrainSpreadSummary = new ArrayList(); 
-    
+    ArrayList<int[]> patient_zero_newStrainSpreadSummary = new ArrayList();
+
+    // Vaccination
+    double[][] vaccineSettingAll;
+    public static final int VACCINE_SETTING_LENGTH = 0;
+    public static final int VACCINE_START_TIME = VACCINE_SETTING_LENGTH + 1;
+    public static final int VACCINE_END_TIME = VACCINE_START_TIME + 1;
+
+    public void setVaccineSetting(double[][] vaccineSetting) {
+        this.vaccineSettingAll = vaccineSetting;
+    }
+
     public void set_patient_zero(boolean tsa_patient_zero) {
         this.use_patient_zero = tsa_patient_zero;
     }
@@ -565,10 +578,12 @@ public class SinglePopRunnable implements Runnable {
             }
             // Set coexist matrix            
 
-            if (coexistMat != null) {
-                AbstractInfection[] infList = getPopulation().getInfList();
-                for (AbstractInfection inf : infList) {
+            AbstractInfection[] infList = getPopulation().getInfList();
+            for (AbstractInfection inf : infList) {
+                if (coexistMat != null) {
                     ((MultiStrainInfectionInterface) inf).setStrainCoexistMatrix(coexistMat);
+                } else {
+                    ((MultiStrainInfectionInterface) inf).setStrainCoexistMatrix(new float[1][1]); // Default single strain
                 }
             }
 
@@ -636,6 +651,23 @@ public class SinglePopRunnable implements Runnable {
                 getPopulation().setSnapshotCount(snapCounts[s]);
 
                 for (int f = 0; f < snapFreq; f++) {
+
+                    // Set vaccine only at start and end point
+                    if (vaccineSettingAll != null) {
+                        for (double[] vaccSetting : vaccineSettingAll) {
+                            if (getPopulation().getGlobalTime() == vaccSetting[VACCINE_START_TIME]) {
+                                SiteSpecificVaccination vacc;
+                                int settingStart = vaccSetting.length - (int) vaccSetting[VACCINE_SETTING_LENGTH];                                
+                                vacc = new SiteSpecificVaccination(Arrays.copyOfRange(vaccSetting, settingStart, vaccSetting.length));
+                                getPopulation().setParameter("Vaccine_site_specific", MSMPopulation.MSM_SITE_SPECIFIC_VACCINATION, vacc);
+                            } else if (getPopulation().getGlobalTime() == vaccSetting[VACCINE_END_TIME]
+                                    && vaccSetting[VACCINE_END_TIME] > vaccSetting[VACCINE_START_TIME]) {
+                                getPopulation().setParameter("Vaccine_site_specific", MSMPopulation.MSM_SITE_SPECIFIC_VACCINATION, null);
+                            }
+
+                        }
+                    }
+
                     // Check for intro infection
                     if (infectionIntroMap.containsKey(getPopulation().getGlobalTime())) {
                         float[] prevalCount = infectionIntroMap.get(getPopulation().getGlobalTime());
@@ -769,7 +801,7 @@ public class SinglePopRunnable implements Runnable {
 
                         }
 
-                        showStrStatus(output.toString());                        
+                        showStrStatus(output.toString());
                         System.out.println(output.toString());
                     }
                     t++;
@@ -936,8 +968,8 @@ public class SinglePopRunnable implements Runnable {
 
                     for (int i = 0; i < hasStrainComposition.length; i++) {
                         // Extinction time
-                        if (!hasStrainComposition[i] && 
-                                strainCompositionActiveRange[i][0] < pop.getGlobalTime()
+                        if (!hasStrainComposition[i]
+                                && strainCompositionActiveRange[i][0] < pop.getGlobalTime()
                                 && strainCompositionActiveRange[i][1] == 0) {
                             strainCompositionActiveRange[i][1] = pop.getGlobalTime();
                         }
@@ -1175,7 +1207,7 @@ public class SinglePopRunnable implements Runnable {
         } catch (Exception ex) {
             ex.printStackTrace(System.err);
             try {
-                java.io.File errFile = new java.io.File("error.log");
+                java.io.File errFile = new java.io.File(baseDir, "error.log");
                 java.io.FileOutputStream errStr;
                 java.io.PrintWriter errWri;
 

@@ -69,6 +69,8 @@ import util.runnable.ExtractFieldRunnable;
  *  - Add support for skip range and output print
  * 20190204
  *  - Add zipping function for folders generated during simulation
+ * 20190523
+ *  - Add support for vaccine implementation
  * </pre>
  */
 public class Simulation_MSM_Population implements SimulationInterface {
@@ -76,20 +78,24 @@ public class Simulation_MSM_Population implements SimulationInterface {
     public static final String[] PROP_NAME_MSM_MIS = {
         "PROP_STRAINS_INTRO_AT", "PROP_STRAINS_COEXIST_MAT",
         "PROP_MSM_SIM_TYPE", "PROP_MSM_CUSTOM_PARAMETER",
-        "PROP_MSM_SKIP_THREAD_RANGE",};
+        "PROP_MSM_SKIP_THREAD_RANGE", "PROP_MSM_VACCINE_SETTING"};
 
     public static final Class[] PROP_CLASS_MSM_MIS = {
         float[][].class, // float[]{globaltime, strainNum, site, number of infection to introduce, frequency (optional), candidate behavior }
         float[][].class, // float[exist_strain][new_strain]{likelihood to coexist}
         Integer.class, // 0 (default) = simulation, 1 = optimisation
-        String.class, // For optimisation infection targer      
-        int[].class,};
+        String.class, // For optimisation infection target      
+        int[].class, // Skip thread range
+        double[][].class, // Vaccine support 
+    //- Format: {Length of vaccine setting, startTime, endTime(or <=startTime if forever), % vaccinated as they enter pop, vaccination setting}
+    };
 
     public static final int PROP_STRAINS_INTRO_AT = PROP_NAME.length;
     public static final int PROP_STRAINS_COEXIST_MAT = PROP_STRAINS_INTRO_AT + 1;
     public static final int PROP_MSM_SIM_TYPE = PROP_STRAINS_COEXIST_MAT + 1;
     public static final int PROP_MSM_CUSTOM_PARAMETER = PROP_MSM_SIM_TYPE + 1;
     public static final int PROP_MSM_SKIP_THREAD_RANGE = PROP_MSM_CUSTOM_PARAMETER + 1;
+    public static final int PROP_MSM_VACCINE_SETTING = PROP_MSM_SKIP_THREAD_RANGE + 1;
 
     // Output filename
     public static final String[] FILE_NAMES_OBJ = {"endNumInf.obj", "extinctAt.obj", "snapCount.obj",
@@ -466,6 +472,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         runnable[r].setCoexistMat((float[][]) propVal[PROP_STRAINS_COEXIST_MAT]);
                     }
 
+                    if (propVal[PROP_MSM_VACCINE_SETTING] != null) {
+                        runnable[r].setVaccineSetting((double[][]) propVal[PROP_MSM_VACCINE_SETTING]);
+                    }
+
                     runnable[r].setPrintPrevalence(((Integer) propVal[PROP_USE_PARALLEL]) <= 1);
 
                     threadCounter++;
@@ -642,7 +652,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
             });
 
             for (File dir : exportDirs) {
-                util.FileZipper.zipFile(dir, new File(baseDir, dir.getName() + ".zip"));
+                util.FileZipper.zipFile(dir, new File(baseDir, dir.getName() + ".zip"));  
+                File[] allFiles = dir.listFiles();                
+                
+                for(File f : allFiles){
+                    f.delete();
+                }                
+                Files.delete(dir.toPath());
             }
 
         } catch (ClassNotFoundException ex) {
@@ -745,6 +761,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public static void decodeSnapCountFile(File baseDir, Object[] propVal) throws FileNotFoundException, IOException, ClassNotFoundException {
         File snapCountFile = new File(baseDir, FILE_NAMES_OBJ[FILE_SNAPCOUNTS]);
+        int numYearToExport = 31;
 
         if (snapCountFile.exists()) {
 
@@ -770,13 +787,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
             int[] newStrainExinctAtSnapshot = new int[entCollection.length];
             int[][][] prevalenceByStrainAt = new int[entCollection.length][4][3]; // 1 yr, 2 yr, 5 yr and 10 yr, no infection, base strain, import strain
             int[][][][] yearly_prevalenceBySiteAndStrainAt
-                    = new int[entCollection.length][11][4][3]; // [year][site]{no infection, base strain, import strain}
+                    = new int[entCollection.length][numYearToExport][4][3]; // [year][site]{no infection, base strain, import strain}
 
             //Format: from snapshotCountClassifier
             final int PREVAL_ALL = 0;
 
             for (int[][][] entry : entCollection) {
-                int importAtSnap = -1;
+                int importAtSnap = 0;
 
                 int snapFreq = (int) propVal[PROP_SNAP_FREQ];
                 final int snapPerYr = 360 / snapFreq;
@@ -792,37 +809,35 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     if (entry[snapCounter][PREVAL_ALL][2] + entry[snapCounter][PREVAL_ALL][3] > 0) {
                         newStrainExinctAtSnapshot[simCounter]++;
                     }
-                    if (importAtSnap > 0) {
-                        int timePt = -1;
-                        int yearTimePt = -1;
-                        if (snapCounter - importAtSnap == snapPerYr) {
-                            timePt = 0;
-                        } else if (snapCounter - importAtSnap == 2 * snapPerYr) {
-                            timePt = 1;
-                        } else if (snapCounter - importAtSnap == 5 * snapPerYr) {
-                            timePt = 2;
-                        } else if (snapCounter - importAtSnap == 10 * snapPerYr) {
-                            timePt = 3;
-                        }
 
-                        if ((snapCounter >= importAtSnap) && (snapCounter - importAtSnap) % snapPerYr == 0) {
-                            yearTimePt = (snapCounter - importAtSnap) / snapPerYr;
-                        }
+                    int timePt = -1;
+                    int yearTimePt = -1;
+                    if (snapCounter - importAtSnap == snapPerYr) {
+                        timePt = 0;
+                    } else if (snapCounter - importAtSnap == 2 * snapPerYr) {
+                        timePt = 1;
+                    } else if (snapCounter - importAtSnap == 5 * snapPerYr) {
+                        timePt = 2;
+                    } else if (snapCounter - importAtSnap == 10 * snapPerYr) {
+                        timePt = 3;
+                    }
 
-                        if (timePt >= 0) {
-                            prevalenceByStrainAt[simCounter][timePt][0] = entry[snapCounter][PREVAL_ALL][0];
-                            prevalenceByStrainAt[simCounter][timePt][1] = entry[snapCounter][PREVAL_ALL][1];
-                            prevalenceByStrainAt[simCounter][timePt][2] = entry[snapCounter][PREVAL_ALL][2] + entry[snapCounter][PREVAL_ALL][3];
-                        }
+                    if ((snapCounter >= importAtSnap) && (snapCounter - importAtSnap) % snapPerYr == 0) {
+                        yearTimePt = (snapCounter - importAtSnap) / snapPerYr;
+                    }
 
-                        if (yearTimePt >= 0 && yearTimePt < yearly_prevalenceBySiteAndStrainAt[simCounter].length) {
-                            for (int site = 0; site < entry[snapCounter].length; site++) {
-                                yearly_prevalenceBySiteAndStrainAt[simCounter][yearTimePt][site][0] = entry[snapCounter][site][0];
-                                yearly_prevalenceBySiteAndStrainAt[simCounter][yearTimePt][site][1] = entry[snapCounter][site][1];
-                                yearly_prevalenceBySiteAndStrainAt[simCounter][yearTimePt][site][2] = entry[snapCounter][site][2] + entry[snapCounter][site][3];
-                            }
-                        }
+                    if (timePt >= 0) {
+                        prevalenceByStrainAt[simCounter][timePt][0] = entry[snapCounter][PREVAL_ALL][0];
+                        prevalenceByStrainAt[simCounter][timePt][1] = entry[snapCounter][PREVAL_ALL][1];
+                        prevalenceByStrainAt[simCounter][timePt][2] = entry[snapCounter][PREVAL_ALL][2] + entry[snapCounter][PREVAL_ALL][3];
+                    }
 
+                    if (yearTimePt >= 0 && yearTimePt < yearly_prevalenceBySiteAndStrainAt[simCounter].length) {
+                        for (int site = 0; site < entry[snapCounter].length; site++) {
+                            yearly_prevalenceBySiteAndStrainAt[simCounter][yearTimePt][site][0] = entry[snapCounter][site][0];
+                            yearly_prevalenceBySiteAndStrainAt[simCounter][yearTimePt][site][1] = entry[snapCounter][site][1];
+                            yearly_prevalenceBySiteAndStrainAt[simCounter][yearTimePt][site][2] = entry[snapCounter][site][2] + entry[snapCounter][site][3];
+                        }
                     }
 
                 }
@@ -832,15 +847,17 @@ public class Simulation_MSM_Population implements SimulationInterface {
             PrintWriter pri;
 
             // Extinct at
-            File newStrainExinctAt = new File(baseDir, FILE_NAMES_OBJ[FILE_SNAPCOUNTS] + "_newStrainExinctAtSnapshot.csv");
-            pri = new PrintWriter(newStrainExinctAt);
-            for (int s = 0; s < newStrainExinctAtSnapshot.length; s++) {
-                pri.print(s);
-                pri.print(',');
-                pri.print(newStrainExinctAtSnapshot[s]);
-                pri.println();
+            if (propVal[PROP_STRAINS_INTRO_AT] != null) {
+                File newStrainExinctAt = new File(baseDir, FILE_NAMES_OBJ[FILE_SNAPCOUNTS] + "_newStrainExinctAtSnapshot.csv");
+                pri = new PrintWriter(newStrainExinctAt);
+                for (int s = 0; s < newStrainExinctAtSnapshot.length; s++) {
+                    pri.print(s);
+                    pri.print(',');
+                    pri.print(newStrainExinctAtSnapshot[s]);
+                    pri.println();
+                }
+                pri.close();
             }
-            pri.close();
 
             //Prevalence at select time 
             File prevalenceAtSelTime = new File(baseDir, FILE_NAMES_OBJ[FILE_SNAPCOUNTS] + "_prevalenceAtSelectedTime.csv");
@@ -882,6 +899,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         header.append(',');
                         header.append("Yr_");
                         header.append(timePt);
+                        
+                        if (propVal[PROP_STRAINS_INTRO_AT] != null) {                            
+                            header.append(" (since importation)");
+                        }
 
                         for (int s = 0; s < yearly_prevalenceBySiteAndStrainAt[0][timePt].length - 2; s++) {
                             header.append(',');
