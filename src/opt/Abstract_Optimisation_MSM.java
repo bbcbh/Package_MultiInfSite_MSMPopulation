@@ -9,6 +9,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import transform.ParameterConstraintTransform;
 import transform.ParameterConstraintTransformSineCurve;
 
@@ -23,8 +24,11 @@ public abstract class Abstract_Optimisation_MSM {
     public static final String FILENAME_OPT_RESULTS_OBJ = "ParamOpt.obj";
     public static final String FILENAME_P0 = "Pre_P0.csv";
     public File baseDir = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Optimsation");
-    public double[] NUM_INF_TARGET = new double[]{100, 460, 400};
+    public double[] NUM_INF_TARGET = new double[]{20, 830, 860};
     public double[] FITTING_WEIGHT = new double[]{1, 1, 1};
+    public double[] NUM_INF_LB = null;
+    public double[] NUM_INF_UB = null;
+    public double[] OPT_SPECIFIC_PARAM = null; // Currently jsut pool size
 
     public int NUM_THREAD = Runtime.getRuntime().availableProcessors();
     public int NUM_SIM = 1;
@@ -42,11 +46,36 @@ public abstract class Abstract_Optimisation_MSM {
                 for (int i = 0; i < NUM_INF_TARGET.length; i++) {
                     NUM_INF_TARGET[i] = Double.parseDouble(val[i]);
                 }
-                if (val.length > NUM_INF_TARGET.length) {
-                    for (int i = 0; i < FITTING_WEIGHT.length; i++) {
-                        FITTING_WEIGHT[i] = Double.parseDouble(val[NUM_INF_TARGET.length + i]);
-                    }
+                int offset = NUM_INF_TARGET.length;
 
+                if (val.length > offset) {
+                    for (int i = 0; i < FITTING_WEIGHT.length; i++) {
+                        FITTING_WEIGHT[i] = Double.parseDouble(val[offset + i]);
+                    }
+                }
+
+                offset += FITTING_WEIGHT.length;
+                if (val.length > offset) {
+                    NUM_INF_LB = Arrays.copyOf(NUM_INF_TARGET, NUM_INF_TARGET.length);
+                    for (int i = 0; i < NUM_INF_LB.length; i++) {
+                        NUM_INF_LB[i] = Double.parseDouble(val[offset + i]);
+                    }
+                }
+
+                offset += NUM_INF_LB.length;
+                if (val.length > offset) {
+                    NUM_INF_UB = Arrays.copyOf(NUM_INF_TARGET, NUM_INF_TARGET.length);
+                    for (int i = 0; i < NUM_INF_LB.length; i++) {
+                        NUM_INF_UB[i] = Double.parseDouble(val[offset + i]);
+                    }
+                }
+                
+                offset += NUM_INF_UB.length;
+                if (val.length > offset) {
+                    OPT_SPECIFIC_PARAM = new double[val.length - offset];
+                    for (int i = 0; i < OPT_SPECIFIC_PARAM.length; i++) {
+                        OPT_SPECIFIC_PARAM[i] = Double.parseDouble(val[offset + i]);
+                    }
                 }
 
             }
@@ -78,6 +107,14 @@ public abstract class Abstract_Optimisation_MSM {
 
     public double[] getFITTING_WEIGHT() {
         return FITTING_WEIGHT;
+    }
+
+    public double[] getNUM_INF_LB() {
+        return NUM_INF_LB;
+    }
+
+    public double[] getNUM_INF_UB() {
+        return NUM_INF_UB;
     }
 
     protected ParameterConstraintTransform[] initaliseContriants() throws IOException, NumberFormatException {

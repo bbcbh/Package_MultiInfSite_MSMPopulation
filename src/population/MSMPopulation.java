@@ -28,7 +28,7 @@ import population.person.MultiSiteMultiStrainPersonInterface;
 
 /**
  * @author Ben Hui
- * @version 20190116
+ * @version 20190620
  *
  * <p>
  * History:</p>
@@ -94,10 +94,24 @@ import population.person.MultiSiteMultiStrainPersonInterface;
  * <p>
  * 20190523 - Add support for vaccination
  * </p>
+ * <p>
+ * 20190620 - Add support for adjusting population size.
+ * </p>
  */
 public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
-    public static final int NUM_IN_POP = 10000;
+    public int numInPop = 10000;
+   
+    public void setInitNumInPop(int numInPop) {
+        
+        if(getPop() != null){
+            System.err.println("Number in population already set as " + getPop().length 
+                    + ". New population size not setted.");            
+            
+        }else{        
+            this.numInPop = numInPop;
+        }
+    }
     public static final int ACT_ANAL = 0;  // Coresponds to length of MSM_POP_REG_ACT_FREQ and MSM_POP_CAS_ACT_FREQ
     public static final int ACT_ORAL = 1;
     public static final int ACT_RIMMING = 2;
@@ -290,7 +304,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
          */
         float[] numByGrp = (float[]) getFields()[MSM_NUM_IN_GRP];
 
-        int[] numByGroupAccum = StaticMethods.accumulativeArray(NUM_IN_POP, numByGrp);
+        int[] numByGroupAccum = StaticMethods.accumulativeArray(numInPop, numByGrp);
 
         float[] casualPartProb = (float[]) getFields()[MSM_CAS_PART_PROB];
         int[][] casualPartLimit = (int[][]) getFields()[MSM_CAS_PART_SPREAD];
@@ -298,7 +312,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         define_CASUAL_PARTNER_PROB(casualPartLimit, casualPartProb);
 
-        setPop(new RelationshipPerson_MSM[NUM_IN_POP]);
+        setPop(new RelationshipPerson_MSM[numInPop]);
         setRelMap(new RelationshipMap[]{
             new RelationshipMap(),
             new RelationshipMap(),});
@@ -308,7 +322,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         int grpIndex = 0;
 
-        for (int p = 0; p < NUM_IN_POP; p++) {
+        for (int p = 0; p < numInPop; p++) {
             RelationshipPerson_MSM person = new RelationshipPerson_MSM(p + 1, true,
                     AGE_RANGE[0] + getRNG().nextInt(AGE_RANGE[1] - AGE_RANGE[0]), 3); // 3 sites
             getPop()[p] = person;

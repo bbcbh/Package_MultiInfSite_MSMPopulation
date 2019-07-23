@@ -25,17 +25,17 @@ import sim.SinglePopRunnable;
  *
  * @author Ben Hui
  */
-public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
+public class Residual_Func_TranProb_NumInfRangeFit extends AbstractResidualFunc {
 
     File baseDir;
     Object[] defaultProbVal;
     String[] defaultModelInit;
-    public int NUM_SIM = 1;
+    public int NUM_SIM_PER_RESIDUAL = 1;
     public long BASESEED = 6109418859537162492l;
-    public int NUM_THREAD = Runtime.getRuntime().availableProcessors();
+    public int THREAD_POOL_SIZE_PER_RESIDUAL = Runtime.getRuntime().availableProcessors();
     Abstract_Optimisation_MSM src;
 
-    public Residual_Func_TranProb_NumInfFit(Abstract_Optimisation_MSM src) throws IOException {
+    public Residual_Func_TranProb_NumInfRangeFit(Abstract_Optimisation_MSM src) throws IOException {
 
         this.src = src;
         this.baseDir = src.getBaseDir();
@@ -50,35 +50,42 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
         }
         sim.loadProperties(prop);
 
-        NUM_SIM = sim.getPropVal()[Simulation_MSM_Population.PROP_NUM_SIM_PER_SET]
-                != null ? (Integer) (sim.getPropVal()[Simulation_MSM_Population.PROP_NUM_SIM_PER_SET]) : NUM_SIM;
+        NUM_SIM_PER_RESIDUAL = sim.getPropVal()[Simulation_MSM_Population.PROP_NUM_SIM_PER_SET]
+                != null ? (Integer) (sim.getPropVal()[Simulation_MSM_Population.PROP_NUM_SIM_PER_SET]) : NUM_SIM_PER_RESIDUAL;
         BASESEED = sim.getPropVal()[Simulation_MSM_Population.PROP_BASESEED]
                 != null ? ((Long) sim.getPropVal()[Simulation_MSM_Population.PROP_BASESEED]) : BASESEED;
 
         defaultProbVal = sim.getPropVal();
         defaultModelInit = sim.getPropModelInit();
+
     }
 
-    public Residual_Func_TranProb_NumInfFit(Abstract_Optimisation_MSM src, int numSim_forced, int numThread_forced) throws IOException {
+    public Residual_Func_TranProb_NumInfRangeFit(Abstract_Optimisation_MSM src,
+            int numSim_forced, int num_sim_per_residual) throws IOException {
         this(src);
-        this.NUM_SIM = numSim_forced;
-        this.NUM_THREAD = numThread_forced;
+        this.NUM_SIM_PER_RESIDUAL = numSim_forced;
+        this.THREAD_POOL_SIZE_PER_RESIDUAL = num_sim_per_residual;
     }
 
     @Override
     public double[] generateResidual(double[] param) {
-
         Object[] propVal = Arrays.copyOf(defaultProbVal, defaultProbVal.length);
+
         long[] seed;
 
-        if (NUM_SIM <= 1) {
-            seed = new long[]{BASESEED};
-        } else {
-            seed = new long[NUM_SIM];
-            random.MersenneTwisterRandomGenerator RNG = new random.MersenneTwisterRandomGenerator(BASESEED);
-            for (int i = 0; i < seed.length; i++) {
-                seed[i] = RNG.nextLong();
+        if (preset_Seed == null) {
+
+            if (NUM_SIM_PER_RESIDUAL <= 1) {
+                seed = new long[]{BASESEED};
+            } else {
+                seed = new long[NUM_SIM_PER_RESIDUAL];
+                random.MersenneTwisterRandomGenerator RNG = new random.MersenneTwisterRandomGenerator(BASESEED);
+                for (int i = 0; i < seed.length; i++) {
+                    seed[i] = RNG.nextLong();
+                }
             }
+        } else {
+            seed = Arrays.copyOf(preset_Seed, NUM_SIM_PER_RESIDUAL);
         }
 
         SinglePopRunnable[] runnable = new SinglePopRunnable[seed.length];
@@ -90,8 +97,8 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
         int numInExe = 0;
 
         for (int r = 0; r < runnable.length; r++) {
-            if (NUM_THREAD > 1 && exec == null) {
-                exec = Executors.newFixedThreadPool(NUM_THREAD);
+            if (THREAD_POOL_SIZE_PER_RESIDUAL > 1 && exec == null) {
+                exec = Executors.newFixedThreadPool(THREAD_POOL_SIZE_PER_RESIDUAL);
             }
 
             runnable[r] = new SinglePopRunnable(r, ((Number) propVal[PROP_NUM_SNAP]).intValue(),
@@ -157,7 +164,7 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
                 }
             }
 
-            if (NUM_THREAD <= 1 || exec == null) {
+            if (THREAD_POOL_SIZE_PER_RESIDUAL <= 1 || exec == null) {
                 runnable[r].run();
 
             } else {
@@ -175,7 +182,7 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
                 numInExe++;
             }
 
-            if (numInExe == NUM_THREAD) {
+            if (numInExe == THREAD_POOL_SIZE_PER_RESIDUAL) {
                 try {
                     exec.shutdown();
                     if (!exec.awaitTermination(2, TimeUnit.DAYS)) {
@@ -186,6 +193,7 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
                 }
                 exec = null;
             }
+
         }
 
         // Final run (if needed)
@@ -205,11 +213,13 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
             runInfected[r] = runnable[r].getPopulation().getNumInf();
         }
 
-        double[] res = new double[3];
+        double[] res = new double[3 * runnable.length];
 
+        int p = 0;
         for (int r = 0; r < runnable.length; r++) {
-            for (int i = 0; i < res.length; i++) {
-                res[i] += ((runInfected[r][i] - src.getNUM_INF_TARGET()[i]) * src.getFITTING_WEIGHT()[i]) / runnable.length;
+            for (int i = 0; i < runInfected[r].length; i++) {
+                res[p] = (runInfected[r][i] - src.getNUM_INF_TARGET()[i]) * src.getFITTING_WEIGHT()[i];
+                p++;
             }
         }
 

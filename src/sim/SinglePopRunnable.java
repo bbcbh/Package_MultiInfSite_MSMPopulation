@@ -22,6 +22,7 @@ import util.PersonClassifier;
 import util.StaticMethods;
 import infection.MultiStrainInfectionInterface;
 import infection.vaccination.SiteSpecificVaccination;
+import java.nio.file.Files;
 import population.person.MultiSiteMultiStrainPersonInterface;
 import population.person.RelationshipPerson;
 import relationship.SingleRelationship;
@@ -29,7 +30,7 @@ import relationship.SingleRelationship;
 /**
  *
  * @author Ben Hui
- * @version 20190123
+ * @version 20190620
  *
  * History:  <pre>
  * 20150313
@@ -55,6 +56,8 @@ import relationship.SingleRelationship;
  *  - Create a new RNG for selecting candidate within introStrain
  * 20190523
  *  - Add support for vaccine setting
+ * 20190620
+ *  - Add support for initial pop size
  * </pre>
  *
  */
@@ -89,7 +92,7 @@ public class SinglePopRunnable implements Runnable {
     public static final String EXPORT_INDIV_PREFIX = "IndivdualSnap_";
     private int[] exportAt = null;
     private int exportAtPt = 0;
-    private boolean printPrevalence = false;
+    private int printPrevalenceAtFreq = -1;
 
     ArrayList<float[]> strainIntroEnt = new ArrayList<>();
     int strainIntroPt = 0;
@@ -141,8 +144,8 @@ public class SinglePopRunnable implements Runnable {
         this.baseDir = baseDir;
     }
 
-    public void setPrintPrevalence(boolean printPrevalence) {
-        this.printPrevalence = printPrevalence;
+    public void setPrintPrevalenceAtFreq(int printPrevalenceAtFreq) {
+        this.printPrevalenceAtFreq = printPrevalenceAtFreq;
     }
 
     public void setInfectioHistoryPrefix(String infectioHistoryPrefix) {
@@ -313,12 +316,15 @@ public class SinglePopRunnable implements Runnable {
 
     private void modelBurnIn() {
         if (modelBurnIn > 0) {
+            //long tic = System.currentTimeMillis();
 
-            showStrStatus("S" + getId() + ": Model burn-in for " + modelBurnIn + " steps");
+            //showStrStatus("S" + getId() + ": Model burn-in for " + modelBurnIn + " steps");
             for (int t = 0; t < modelBurnIn; t++) {
                 getPopulation().advanceTimeStep(1);
+
+                //showStrStatus("S" + getId() + ": t = " + t + ", time = " + (System.currentTimeMillis() - tic) / 1000f + "s");
             }
-            showStrStatus("S" + getId() + ": Model burn-in complete.");
+            //showStrStatus("S" + getId() + ": Model burn-in complete.");
 
         }
     }
@@ -434,6 +440,11 @@ public class SinglePopRunnable implements Runnable {
 
                             wri.close();
 
+                            // Zipping and remove behaviour file                            
+                            File zipFile = new File(behaviourFile.getParentFile(), behaviourFile.getName() + ".zip");
+                            util.FileZipper.zipFile(behaviourFile, zipFile);
+                            Files.delete(behaviourFile.toPath());
+
                         } catch (IOException ex) {
                             ex.printStackTrace(System.err);
                         }
@@ -459,7 +470,9 @@ public class SinglePopRunnable implements Runnable {
             ((AbstractRegCasRelMapPopulation) getPopulation()).loadPropertiesToPop(propInitVal);
         }
         setModelBurnIn(modelBurnIn);
+
         getPopulation().initialise();
+        showStrStatus("Model initialised.");
     }
 
     public int[] getExtinctionAt() {
@@ -596,7 +609,11 @@ public class SinglePopRunnable implements Runnable {
                 ent[1] = 0;
             }
 
+            long tic = System.currentTimeMillis();
             modelBurnIn();
+            showStrStatus("S" + getId() + ": Model burn-in finished after "
+                    + (System.currentTimeMillis() - tic) / 1000f + "s.");
+
             reportStepStatus(modelBurnIn);
             t = modelBurnIn;
             showStrStatus("S" + getId() + ": Simulation in progress");
@@ -657,7 +674,7 @@ public class SinglePopRunnable implements Runnable {
                         for (double[] vaccSetting : vaccineSettingAll) {
                             if (getPopulation().getGlobalTime() == vaccSetting[VACCINE_START_TIME]) {
                                 SiteSpecificVaccination vacc;
-                                int settingStart = vaccSetting.length - (int) vaccSetting[VACCINE_SETTING_LENGTH];                                
+                                int settingStart = vaccSetting.length - (int) vaccSetting[VACCINE_SETTING_LENGTH];
                                 vacc = new SiteSpecificVaccination(Arrays.copyOfRange(vaccSetting, settingStart, vaccSetting.length));
                                 getPopulation().setParameter("Vaccine_site_specific", MSMPopulation.MSM_SITE_SPECIFIC_VACCINATION, vacc);
                             } else if (getPopulation().getGlobalTime() == vaccSetting[VACCINE_END_TIME]
@@ -760,7 +777,7 @@ public class SinglePopRunnable implements Runnable {
                     // Check if need to export pop
                     exportPopAt();
 
-                    if (printPrevalence) {
+                    if (printPrevalenceAtFreq > 0 && (getPopulation().getGlobalTime() % printPrevalenceAtFreq == 0)) {
                         StringBuilder output = new StringBuilder();
                         output.append(this.getId());
                         output.append(',');
@@ -802,7 +819,10 @@ public class SinglePopRunnable implements Runnable {
                         }
 
                         showStrStatus(output.toString());
-                        System.out.println(output.toString());
+
+                        if (printPrevalenceAtFreq == 1) {
+                            System.out.println(output.toString());
+                        }
                     }
                     t++;
 
@@ -1108,7 +1128,8 @@ public class SinglePopRunnable implements Runnable {
             }
 
             showStrStatus("S" + getId() + ": Simulation complete."
-                    + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()));
+                    + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()) + " ");            
+            showStrStatus("S" + getId() + ": Time required (total) " + (System.currentTimeMillis() - tic) / 1000f + "s.");
 
             if (use_patient_zero && patient_zero_newStrainSpreadSummary != null) {
 

@@ -1,5 +1,6 @@
 package opt;
 
+import opt.*;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -18,19 +19,17 @@ import transform.ParameterConstraintTransform;
  * @version 20181026
  *
  */
-public class Optimisation_MSM_TranProb_NumInfFit_GA extends Abstract_Optimisation_MSM {
+public class Optimisation_MSM_TranProb_NumInfRangeFit_GA extends Abstract_Optimisation_MSM {
 
-    private int POOL_SIZE; //  = NUM_THREAD * NUM_SIM
+    private int POOL_SIZE = 1000;
     public static final String FILENAME_OPT_GA_STORE = "GA_POP.obj";
 
-    public Optimisation_MSM_TranProb_NumInfFit_GA(String[] arg) {
+    public Optimisation_MSM_TranProb_NumInfRangeFit_GA(String[] arg) {
         super(arg);
-        //POOL_SIZE = Integer.parseInt(arg[0]);
-        POOL_SIZE = NUM_THREAD * NUM_SIM;
-
         if (OPT_SPECIFIC_PARAM != null) {
             POOL_SIZE = (int) OPT_SPECIFIC_PARAM[0];
         }
+
     }
 
     @Override
@@ -39,7 +38,7 @@ public class Optimisation_MSM_TranProb_NumInfFit_GA extends Abstract_Optimisatio
         AbstractResidualFunc optimisationFunc;
 
         constraints = initaliseContriants();
-        optimisationFunc = new Residual_Func_TranProb_NumInfFit(this, 1, 1); // Using 1 threads per parameter sample                
+        optimisationFunc = new Residual_Func_TranProb_NumInfRangeFit(this, NUM_SIM, NUM_THREAD); // Using 1 threads per parameter sample                
 
         AbstractParameterOptimiser opt = new GeneticAlgorithmOptimiser(optimisationFunc);
 
@@ -51,6 +50,8 @@ public class Optimisation_MSM_TranProb_NumInfFit_GA extends Abstract_Optimisatio
         opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_OPT_POP_FILE, new File(parentDir, FILENAME_OPT_GA_STORE));
         opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_OPT_USE_PARALLEL, NUM_THREAD);
         opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_OPT_POP_SIZE, POOL_SIZE);
+        opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_NUM_SEED_PER_GA_POP_ENT, NUM_SIM);
+
         opt.setResOptions(false, AbstractParameterOptimiser.RES_OPTIONS_PRINT);
 
         System.out.println("# Parameters = " + constraints.length);
@@ -60,9 +61,20 @@ public class Optimisation_MSM_TranProb_NumInfFit_GA extends Abstract_Optimisatio
 
         // Default p0, to be replace by imported if necessary
         p0 = new double[constraints.length];
-        r0 = new double[this.getNUM_INF_TARGET().length];
+        r0 = new double[this.getNUM_INF_TARGET().length * NUM_SIM];
 
         Arrays.fill(r0, Double.NaN);
+
+        // Set R0 tol - if all fit within tol then optimisation stop
+        double[][] r0_bounds = new double[2][r0.length];
+
+        for (int i = 0; i < r0.length; i += getNUM_INF_TARGET().length) {
+            for (int t = 0; t < getNUM_INF_TARGET().length; t++) {
+                r0_bounds[0][i + t] = (getNUM_INF_LB()[t] - getNUM_INF_TARGET()[t]) * getFITTING_WEIGHT()[t];
+                r0_bounds[1][i + t] = (getNUM_INF_UB()[t] - getNUM_INF_TARGET()[t]) * getFITTING_WEIGHT()[t];
+            }
+        }
+        opt.setParameter(GeneticAlgorithmOptimiser.PARAM_GA_RO_TOL, r0_bounds);
 
         // Default p0, to be replace by imported if necessary
         File preGAPop = new File(parentDir, FILENAME_OPT_GA_STORE);

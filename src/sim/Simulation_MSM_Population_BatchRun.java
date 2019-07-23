@@ -1,5 +1,6 @@
 package sim;
 
+import opt.Optimisation_MSM_TranProb_NumInfRangeFit_GA;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileNotFoundException;
@@ -66,9 +67,9 @@ public class Simulation_MSM_Population_BatchRun {
 
             Integer type = (Integer) sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_SIM_TYPE];
 
-            if (type != null && (type == 1 || type == 2) ) {
+            if (type != null && (type == 1 || type == 2 || type == 3)) {
                 // Optimsiation 
-                System.out.println("Performing optimisation from " + propFile.toFile().getParentFile().getAbsolutePath() +  " of type = " + type);
+                System.out.println("Performing optimisation from " + propFile.toFile().getParentFile().getAbsolutePath() + " of type = " + type);
 
                 String[] rArg = new String[5];
                 // ImportPath
@@ -87,20 +88,30 @@ public class Simulation_MSM_Population_BatchRun {
                         != null ? sim.getPropVal()[Simulation_MSM_Population.PROP_USE_PARALLEL].toString() : "";
 
                 Abstract_Optimisation_MSM run;
-                if (type == 1) {
-                    run = new Optimisation_MSM_TransProb_NumInfFit_NM(rArg);
-                } else {
-                    run = new Optimisation_MSM_TranProb_NumInfFit_GA(rArg);
+
+                switch (type) {
+                    case 1:
+                        run = new Optimisation_MSM_TransProb_NumInfFit_NM(rArg);
+                        break;
+                    case 2:
+                        run = new Optimisation_MSM_TranProb_NumInfFit_GA(rArg);
+                        break;
+                    default:
+                        run = new Optimisation_MSM_TranProb_NumInfRangeFit_GA(rArg);
+                        
+                        
+
                 }
+
                 run.runOptimisation();
 
             } else {
                 System.out.println("Generate results set for " + propFile.toFile().getParentFile().getAbsolutePath());
-                
-                if(sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER] != null){
+
+                if (sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER] != null) {
                     sim.setSimCustomParameterStr(sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER].toString());
-                }                                 
-                
+                }
+
                 sim.generateOneResultSet();
                 sim.decodeSnapCountFile();
             }
