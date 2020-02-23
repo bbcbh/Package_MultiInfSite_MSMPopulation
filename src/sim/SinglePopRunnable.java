@@ -386,6 +386,19 @@ public class SinglePopRunnable implements Runnable {
 
                             StringBuilder header = new StringBuilder("Id,Age,BehavType,# Reg,# Cas, # Cas in 6 months");
 
+                            HashMap<Integer, int[]> currentlyVaccinated = null;
+
+                            if (getPopulation() instanceof MSMPopulation) {
+                                MSMPopulation msmPop = (MSMPopulation) getPopulation();
+                                currentlyVaccinated = (HashMap<Integer, int[]>) msmPop.getValue("", MSMPopulation.MSM_SITE_CURRENTLY_VACCINATED);
+
+                            }
+
+                            if (currentlyVaccinated != null) {
+                                header.append(',');
+                                header.append("Vaccinated Until");
+                            }
+
                             for (int p = 0; p < getPopulation().getPop().length; p++) {
                                 RelationshipPerson person = (RelationshipPerson) getPopulation().getPop()[p];
                                 int inReg
@@ -429,6 +442,16 @@ public class SinglePopRunnable implements Runnable {
                                 numPartnStr.append(inCas);
                                 numPartnStr.append(',');
                                 numPartnStr.append(numCasualIn6month);
+                                if (currentlyVaccinated != null) {
+                                    numPartnStr.append(',');
+                                    int[] res = currentlyVaccinated.get(person.getId());
+                                    int vr = 0;
+                                    if (res != null) {
+                                        vr = res[MSMPopulation.VACC_SETTING_AGE_EXPIRY];
+                                    }
+                                    numPartnStr.append(vr);
+                                }
+
                                 for (int i = 0; i < infStat.length; i++) {
                                     numPartnStr.append(',');
                                     numPartnStr.append(infStat[i]);
@@ -1128,7 +1151,7 @@ public class SinglePopRunnable implements Runnable {
             }
 
             showStrStatus("S" + getId() + ": Simulation complete."
-                    + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()) + " ");            
+                    + " Num infected at end = " + Arrays.toString(getPopulation().getNumInf()) + " ");
             showStrStatus("S" + getId() + ": Time required (total) " + (System.currentTimeMillis() - tic) / 1000f + "s.");
 
             if (use_patient_zero && patient_zero_newStrainSpreadSummary != null) {

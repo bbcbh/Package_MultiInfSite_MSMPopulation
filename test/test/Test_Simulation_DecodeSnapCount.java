@@ -12,7 +12,10 @@ public class Test_Simulation_DecodeSnapCount {
 
     public static void main(String[] arg) throws IOException, FileNotFoundException, ClassNotFoundException {
 
-        File singleSimFolder = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test\\Vacc_50SU");
+        File singleSimFolder = new File("C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Results_Analyse\\Import_1_A_R_B2_10000");
+                                      
+                                      //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test\\Import_1_A_R_Pop_100000");
+                                      //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test\\Vacc_50SU");
 
         Simulation_MSM_Population sim = new Simulation_MSM_Population();
 
@@ -26,7 +29,7 @@ public class Test_Simulation_DecodeSnapCount {
         sim.setBaseDir(propFile.toFile().getParentFile());
         sim.loadProperties(prop);       
         sim.decodeSnapCountFile();
-        //Simulation_MSM_Population.decodeExportedPopulationFiles(singleSimFolder, new String[]{"export_7920"});
+        Simulation_MSM_Population.decodeExportedPopulationFiles(singleSimFolder, new String[]{"export_7920"});
     }
 
 }
