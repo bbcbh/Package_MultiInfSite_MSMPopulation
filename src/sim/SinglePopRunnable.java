@@ -698,11 +698,9 @@ public class SinglePopRunnable implements Runnable {
                             if (getPopulation().getGlobalTime() == vaccSetting[VACCINE_START_TIME]) {
                                 SiteSpecificVaccination vacc;
                                 int settingStart = vaccSetting.length - (int) vaccSetting[VACCINE_SETTING_LENGTH];
-                                vacc = new SiteSpecificVaccination(Arrays.copyOfRange(vaccSetting, settingStart, vaccSetting.length));
+                                vacc = new SiteSpecificVaccination(Arrays.copyOfRange(vaccSetting, settingStart, vaccSetting.length),
+                                        new int[]{(int) vaccSetting[VACCINE_START_TIME], (int) vaccSetting[VACCINE_END_TIME]});
                                 getPopulation().setParameter("Vaccine_site_specific", MSMPopulation.MSM_SITE_SPECIFIC_VACCINATION, vacc);
-                            } else if (getPopulation().getGlobalTime() == vaccSetting[VACCINE_END_TIME]
-                                    && vaccSetting[VACCINE_END_TIME] > vaccSetting[VACCINE_START_TIME]) {
-                                getPopulation().setParameter("Vaccine_site_specific", MSMPopulation.MSM_SITE_SPECIFIC_VACCINATION, null);
                             }
 
                         }

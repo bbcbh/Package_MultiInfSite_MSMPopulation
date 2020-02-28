@@ -19,6 +19,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -113,12 +114,14 @@ public class Simulation_MSM_Population implements SimulationInterface {
     public static final int FILE_INCIDENT_COUNT = FILE_EVENT_POINTER + 1;
 
     public static final String[] FILE_NAMES_CSV = {"endNumInfPerson.csv", "infStatSnapshot.csv",
-        "numPartnersInlast6Months.csv", "newStrainsHasRegPartners.csv", "strainCompositionActiveRange.csv"};
+        "numPartnersInlast6Months.csv", "newStrainsHasRegPartners.csv", "strainCompositionActiveRange.csv",
+        "vaccinated_stat.csv"};
     public static final int FILE_END_NUM_INF_PERSON_CSV = 0;
     public static final int FILE_INFECTION_STAT_CSV = FILE_END_NUM_INF_PERSON_CSV + 1;
     public static final int FILE_NUM_PARTERS_IN_LAST_6_MONTHS = FILE_INFECTION_STAT_CSV + 1;
     public static final int FILE_NEW_STRAIN_HAS_REG_PARTNERS = FILE_NUM_PARTERS_IN_LAST_6_MONTHS + 1;
     public static final int FILE_STRAIN_COMPOSITION_ACTIVE_RANGE = FILE_NEW_STRAIN_HAS_REG_PARTNERS + 1;
+    public static final int FILE_VACCINATE_STAT = FILE_STRAIN_COMPOSITION_ACTIVE_RANGE + 1;
 
     public static final String[] DIR_NAMES = {"output", "newStrainSpread"};
     public static final int DIR_NAMES_OUTPUT = 0;
@@ -969,8 +972,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
         @Override
         public int[][] call() throws Exception {
-            int[][] res = new int[5][]; // 0 = count, 1 = map_NumberCasual6Months, 2 = map_NumberCasual6MonthInfected, 3 = map_NumberCasual6MonthInfectedNewStrain
-            // 5 = newStrainHasRegPartner
+            int[][] res = new int[6][];
+            // 0 = count,
+            // 1 = map_NumberCasual6Months,
+            // 2 = map_NumberCasual6MonthInfected, 
+            // 3 = map_NumberCasual6MonthInfectedNewStrain
+            // 4 = newStrainHasRegPartner
+            // 5 = Vaccinate stat = new int[] {num_unvaccinated, num_vaccinated_active, num_vaccinated_expired}
 
             Matcher m = p.matcher(popFile.getName());
             m.find();
@@ -979,38 +987,70 @@ public class Simulation_MSM_Population implements SimulationInterface {
             int[] map_NumberCasual6Months = new int[20];
             int[] map_NumberCasual6MonthInfected = new int[20];
             int[] map_NumberCasual6MonthInfectedNewStrain = new int[20];
-            int[] count = new int[inf_stat_header.split(",").length];
+            int[] inf_stat_count = new int[inf_stat_header.split(",").length];
+            int[] vaccinate_stat = new int[3];
 
             ArrayList<Integer> newStrainHasReg = new ArrayList<>();
 
-            count[0] = popId;
+            inf_stat_count[0] = popId;
 
             // Check for decoded indivdual snapshot             
             File decodedSnapFile = new File(exportDir, SinglePopRunnable.EXPORT_INDIV_PREFIX + popId + ".csv");
-            File decodedSnapFileZip = new File(exportDir, decodedSnapFile.getName() + ".zip");            
-         
+            File decodedSnapFileZip = new File(exportDir, decodedSnapFile.getName() + ".zip");
+
             if (decodedSnapFileZip.exists()) {
                 // Unzip file first
-                File tempFile  = util.FileZipper.unzipFile(decodedSnapFileZip, exportDir);
+                File tempFile = util.FileZipper.unzipFile(decodedSnapFileZip, exportDir);
                 tempFile.renameTo(decodedSnapFile);
-               
+                tempFile.delete();
+                
+             
 
             }
 
             if (decodedSnapFile.exists()) {
                 BufferedReader csv = new BufferedReader(new FileReader(decodedSnapFile));
                 String line;
+                String[] headerLine = null;
+
+                int index_numCasIn6Month = -5;
+                int index_numReg = -3;
+                int index_vac_until = -6;
+                int index_age = -1;
+                int index_inf_offset = -6;
 
                 while ((line = csv.readLine()) != null) {
 
                     // Id,Age,BehavType,# Reg,# Cas,# Cas in 6 month,Inf Stat_0,Strain Stat_0,Inf Stat_1,Strain Stat_1,Inf Stat_2,Strain Stat_2
-                    if (!line.startsWith("Id")) {
-                        String[] ent = line.split(",");
-                        int INF_OFFSET = 6;
-                        int numCasual6Months = Integer.parseInt(ent[5]);
-                        int[] infStat = new int[(ent.length - INF_OFFSET) / 2];
+                    // Or 
+                    // Id,Age,BehavType,# Reg,# Cas, # Cas in 6 months,Vaccinated Until,Inf Stat_0,Strain Stat_0,Inf Stat_1,Strain Stat_1,Inf Stat_2,Strain Stat_2
+                    if (line.startsWith("Id")) {
+                        headerLine = line.split(",");
+                        for (int s = 0; s < headerLine.length; s++) {
+                            if (headerLine[s].trim().equals("Age")) {
+                                index_age = s;
+                            }
+                            if (headerLine[s].trim().equals("# Reg")) {
+                                index_numReg = s;
+                            }
+                            if (headerLine[s].trim().equals("# Cas in 6 months")) {
+                                index_numCasIn6Month = s;
+                            }
+                            if (headerLine[s].trim().equals("Vaccinated Until")) {
+                                index_vac_until = s;
+                            }
+                            if (headerLine[s].trim().equals("Inf Stat_0")) {
+                                index_inf_offset = s;
+                            }
+
+                        }
+
+                    } else {
+                        String[] ent = line.split(",");                        
+                        int numCasual6Months = Integer.parseInt(ent[index_numCasIn6Month]);
+                        int[] infStat = new int[(ent.length - index_inf_offset) / 2];
                         int[] strainStat = new int[infStat.length];
-                        int numReg = Integer.parseInt(ent[3]);
+                        int numReg = Integer.parseInt(ent[index_numReg]);
 
                         if (numCasual6Months >= map_NumberCasual6Months.length) {
                             map_NumberCasual6Months = Arrays.copyOf(map_NumberCasual6Months, numCasual6Months + 1);
@@ -1019,12 +1059,23 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         }
 
                         for (int p = 0; p < infStat.length; p++) {
-                            infStat[p] = Integer.parseInt(ent[INF_OFFSET + 2 * p]);
-                            strainStat[p] = Integer.parseInt(ent[INF_OFFSET + 2 * p + 1]);
+                            infStat[p] = Integer.parseInt(ent[index_inf_offset + 2 * p]);
+                            strainStat[p] = Integer.parseInt(ent[index_inf_offset + 2 * p + 1]);
                         }
 
-                        updateExportedPopCount(count, infStat, strainStat, numReg, numCasual6Months,
+                        updateExportedPopCount(inf_stat_count, infStat, strainStat, numReg, numCasual6Months,
                                 map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain, newStrainHasReg);
+
+                        int vaccinated_index = 0; // 0 = unvaccinated, 1 = active, 2 = expired 
+                        if (index_vac_until >= 0) {
+                            int age_current = Integer.parseInt(ent[index_age]);
+                            int vacc_until = Integer.parseInt(ent[index_vac_until]);
+
+                            if (vacc_until > 0) {
+                                vaccinated_index = age_current < vacc_until ? 1 : 2;
+                            }
+                        }
+                        vaccinate_stat[vaccinated_index]++;
 
                     }
 
@@ -1040,7 +1091,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 temp.delete();
 
                 if (pop != null) {
-                    count[1] = pop.getPop().length;
+                    inf_stat_count[1] = pop.getPop().length;
 
                     for (AbstractIndividualInterface p : pop.getPop()) {
 
@@ -1066,15 +1117,26 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         int numReg = pop.getRelMap()[MSMPopulation.MAPPING_REG].containsVertex(p.getId())
                                 ? pop.getRelMap()[MSMPopulation.MAPPING_REG].edgesOf(p.getId()).size() : 0;
 
-                        updateExportedPopCount(count, infStat, strainStat, numReg, numCasual,
+                        updateExportedPopCount(inf_stat_count, infStat, strainStat, numReg, numCasual,
                                 map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain,
                                 newStrainHasReg);
+
+                        int vaccinated_index = 0; // 0 = unvaccinated, 1 = active, 2 = expired 
+                        HashMap<Integer, int[]> currentVacc = (HashMap<Integer, int[]>) pop.getValue("", MSMPopulation.MSM_SITE_CURRENTLY_VACCINATED);
+                        if (currentVacc != null) {
+                            int[] vacEnt = currentVacc.get(p.getId());
+                            if (vacEnt != null) {
+                                vaccinated_index = p.getAge() < vacEnt[MSMPopulation.VACC_SETTING_AGE_EXPIRY] ? 1 : 2;
+                            }
+                        }
+
+                        vaccinate_stat[vaccinated_index]++;
                     }
 
                 }
             }
 
-            res[0] = count;
+            res[0] = inf_stat_count;
             res[1] = map_NumberCasual6Months;
             res[2] = map_NumberCasual6MonthInfected;
             res[3] = map_NumberCasual6MonthInfectedNewStrain;
@@ -1082,6 +1144,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
             for (int i = 0; i < res[4].length; i++) {
                 res[4][i] = newStrainHasReg.get(i);
             }
+            res[5] = vaccinate_stat;
 
             System.out.println("Analysing pop file " + popFile.getName() + " completed.");
 
@@ -1153,6 +1216,14 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 return file.isDirectory() && file.getName().startsWith(EXPORT_PREFIX);
             }
         });
+        
+        Arrays.sort(exportFolders,new Comparator<File>() {
+            @Override
+            public int compare(File t, File t1) {
+                return Integer.compare(Integer.parseInt(t.getName().substring(EXPORT_PREFIX.length())), 
+                        Integer.parseInt(t1.getName().substring(EXPORT_PREFIX.length()))); 
+            }
+        });        
 
         if (specific_dir != null) {
             exportFolders = new File[specific_dir.length];
@@ -1221,6 +1292,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     });
 
                 }
+                
+                final boolean APPEND_PRI = false;
 
                 System.out.println("Analysing " + popFiles.length + " pop file"
                         + (popFiles.length == 1 ? "" : "s") + " at " + exportDir.getAbsolutePath());
@@ -1232,26 +1305,32 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 }
 
                 PrintWriter pri_inf_stat = new PrintWriter(
-                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_INFECTION_STAT_CSV]), true));
+                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_INFECTION_STAT_CSV]), APPEND_PRI));
 
-                if (!prePrintExist[FILE_INFECTION_STAT_CSV]) {
+                if (!prePrintExist[FILE_INFECTION_STAT_CSV] || !APPEND_PRI) {
                     pri_inf_stat.println(Callable_decodeExportPop.inf_stat_header);
                 }
 
                 PrintWriter pri_numPartnerLast6Months = new PrintWriter(
-                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]), true));
+                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]), APPEND_PRI));
 
-                if (!prePrintExist[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]) {
+                if (!prePrintExist[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]|| !APPEND_PRI) {
                     pri_numPartnerLast6Months.println("Sim, Num casual partners in last 6 months, Freq, Freq (infected), Freq (new strain)");
                 }
 
                 PrintWriter pri_newStrainHasRegPartner = new PrintWriter(
-                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NEW_STRAIN_HAS_REG_PARTNERS]), true));
-                if (!prePrintExist[FILE_NEW_STRAIN_HAS_REG_PARTNERS]) {
+                        new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NEW_STRAIN_HAS_REG_PARTNERS]), APPEND_PRI));
+                if (!prePrintExist[FILE_NEW_STRAIN_HAS_REG_PARTNERS]|| !APPEND_PRI) {
                     pri_newStrainHasRegPartner.println("Sim, Num of Reg for those with new strain");
                 }
 
-                PrintWriter[] writers = new PrintWriter[]{pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner};
+                PrintWriter pri_vaccine_stat = new PrintWriter(new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_VACCINATE_STAT]), APPEND_PRI));
+
+                if (!prePrintExist[FILE_VACCINATE_STAT]|| !APPEND_PRI) {
+                    pri_vaccine_stat.println("Sim, Unvaccinated, Vaccinated - active, Vaccinated - expired");
+                }
+
+                PrintWriter[] writers = new PrintWriter[]{pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner, pri_vaccine_stat};
 
                 ExecutorService threadpool = null;
                 int inThreadPool = 0;
@@ -1276,6 +1355,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         System.out.println("Submitting thread to analysis pop file " + popFile.getName());
 
                         if (threadpool == null) {
+                            //threadpool = Executors.newFixedThreadPool(1);
                             threadpool = Executors.newFixedThreadPool(THREAD_POOLSIZE);
                             inThreadPool = 0;
                         }
@@ -1316,11 +1396,12 @@ public class Simulation_MSM_Population implements SimulationInterface {
             int exportedSoFar, Future<int[][]>[] result_Map,
             PrintWriter[] writers) {
 
-        PrintWriter pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner;
+        PrintWriter pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner, pri_vaccination_stat;
 
         pri_inf_stat = writers[0];
         pri_numPartnerLast6Months = writers[1];
         pri_newStrainHasRegPartner = writers[2];
+        pri_vaccination_stat = writers[3];
 
         threadpool.shutdown();
 
@@ -1345,6 +1426,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 int[] map_NumberCasual6MonthInfected = res[2];
                 int[] map_NumberCasual6MonthInfectedNewStrain = res[3];
                 int[] newStrainHasReg = res[4];
+                int[] vaccStat = res[5];
 
                 if (newStrainHasReg.length == 0) {
                     newStrainHasReg = new int[]{-1};
@@ -1380,6 +1462,14 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 }
                 pri_newStrainHasRegPartner.println();
                 pri_newStrainHasRegPartner.flush();
+
+                pri_vaccination_stat.print(exportedSoFar);
+                for (int k = 0; k < vaccStat.length; k++) {
+                    pri_vaccination_stat.print(',');
+                    pri_vaccination_stat.print(vaccStat[k]);
+                }
+                pri_vaccination_stat.println();
+                pri_vaccination_stat.flush();
 
             } catch (InterruptedException | ExecutionException ex) {
                 StringWriter str = new StringWriter();

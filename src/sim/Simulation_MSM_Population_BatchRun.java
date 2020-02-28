@@ -98,8 +98,6 @@ public class Simulation_MSM_Population_BatchRun {
                         break;
                     default:
                         run = new Optimisation_MSM_TranProb_NumInfRangeFit_GA(rArg);
-                        
-                        
 
                 }
 
@@ -114,6 +112,8 @@ public class Simulation_MSM_Population_BatchRun {
 
                 sim.generateOneResultSet();
                 sim.decodeSnapCountFile();
+
+                Simulation_MSM_Population.decodeExportedPopulationFiles(new File(baseDir, singleSimFolder), null);
             }
 
         }

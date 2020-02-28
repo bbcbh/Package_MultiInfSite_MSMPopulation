@@ -26,6 +26,7 @@ import util.PersonClassifier;
 
 import util.StaticMethods;
 import population.person.MultiSiteMultiStrainPersonInterface;
+import static infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT;
 
 /**
  * @author Ben Hui
@@ -236,10 +237,12 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     private transient int screenDayPt = 0;
     private transient int[] screeningToday = null; // Length of screening freq
 
-    // Vaccinated
-    private transient AbstractRealDistribution vaccine_duration_dist = null;
+    // Vaccine    
     public static final int VACC_SETTING_AGE_EXPIRY = 0;
     public static final int VACC_SETTING_LENGTH = VACC_SETTING_AGE_EXPIRY + 1;
+
+    private transient AbstractRealDistribution vaccine_duration_dist = null;
+    private transient AbstractRealDistribution vaccine_remove_sym_infect_duration = null;
 
     // Screening (Targeted)
     private PersonClassifier targetedScreenClassifier = new PersonClassifier() {
@@ -518,9 +521,9 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 // Remove person from vaccine record
                 if (getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
                     ((AbstractVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION]).getVaccinationRecord().remove(person.getId());
-                    if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] != null) {
-                        ((HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED]).remove(person.getId());
-                    }
+                }
+                if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] != null) {
+                    ((HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED]).remove(person.getId());
                 }
 
                 int nextId = ((Number) getFields()[FIELDS_NEXT_ID]).intValue();
@@ -536,13 +539,13 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
                     if (vacc instanceof SiteSpecificVaccination) {
                         SiteSpecificVaccination ssv = (SiteSpecificVaccination) vacc;
-                        double propVacc = ssv.getParameters()[SiteSpecificVaccination.EFFECT_INDEX_PROPORTION_VACC_ENT_POP];
+                        double propVacc = ssv.getParameters()[SiteSpecificVaccination.EFFECT_INDEX_PROPORTION_VACC_COVERAGE_SETTING];
                         if (propVacc > 0) {
                             if (propVacc < 1) {
                                 propVacc = getRNG().nextDouble() < propVacc ? 0 : 1;
                             }
                             if (propVacc >= 1) {
-                                vaccinePerson(vacc, person);
+                                vaccinatePerson(vacc, person);
                             }
                         }
                     } else {
@@ -762,30 +765,54 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
     }
 
-    protected void vaccinePerson(AbstractVaccination vaccine, AbstractIndividualInterface person) {
+    protected void vaccinatePerson(AbstractVaccination vaccine, AbstractIndividualInterface person) {
         if (vaccine != null) {
-            if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] == null) {
-                HashMap<Integer, int[]> currentVaccinated = new HashMap<>();
-                getFields()[MSM_SITE_CURRENTLY_VACCINATED] = currentVaccinated;
-            }
-
-            vaccine.vaccinatePerson(person);
-
-            int[] vacSetting = new int[VACC_SETTING_LENGTH];
-            vacSetting[VACC_SETTING_AGE_EXPIRY] = -1; // -1 = lifelong;
-
-            if (vaccine instanceof SiteSpecificVaccination) {
-                if (vaccine.getParameters().length > SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION) {
-                    if (vaccine_duration_dist == null) {
-                        double defaultDuration = ((SiteSpecificVaccination) vaccine).getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION];
-                        vaccine_duration_dist = new ExponentialDistribution(getRNG(), defaultDuration);
-                    }
-                    vacSetting[VACC_SETTING_AGE_EXPIRY] = (int) Math.round(person.getAge() + vaccine_duration_dist.sample());
+            if (vaccine.vaccinationApplicableAt(getGlobalTime())) {
+                if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] == null) {
+                    HashMap<Integer, int[]> currentVaccinated = new HashMap<>();
+                    getFields()[MSM_SITE_CURRENTLY_VACCINATED] = currentVaccinated;
                 }
+
+                vaccine.vaccinatePerson(person);
+
+                int[] vacSetting = new int[VACC_SETTING_LENGTH];
+                vacSetting[VACC_SETTING_AGE_EXPIRY] = -1; // -1 = lifelong;
+
+                if (vaccine instanceof SiteSpecificVaccination) {
+
+                    if (vaccine.getParameters().length > SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION_DEFAULT) {
+                        if (vaccine_duration_dist == null) {
+                            double defaultDuration = ((SiteSpecificVaccination) vaccine).getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION_DEFAULT];
+                            vaccine_duration_dist = new ExponentialDistribution(getRNG(), defaultDuration);
+
+                        }
+                        vacSetting[VACC_SETTING_AGE_EXPIRY] = (int) Math.round(person.getAge() + vaccine_duration_dist.sample());
+                    }
+                    
+                    // Immediate vaccine effect 
+                    for (int site = 0; site < getInfList().length; site++) {
+                        if (getInfList()[site].isInfectious(person)) {
+                            vaccine_effect_adj_infection_duration((SiteSpecificVaccination) vaccine, person, site);
+                        }
+                        if (getInfList()[site].hasSymptoms(person)) {
+                            vaccine_effect_remove_symptom((SiteSpecificVaccination) vaccine, person, site);
+                        }
+                    }
+
+                }
+                ((HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED]).put(person.getId(), vacSetting);
             }
-            ((HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED]).put(person.getId(), vacSetting);
         }
 
+    }
+
+    protected void vaccine_effect_adj_infection_duration(SiteSpecificVaccination vaccine, AbstractIndividualInterface person, int site) {
+        if (vaccine.getParameters().length > SiteSpecificVaccination.OPTIONAL_EFFECT_ADJ_INF_DUR_DEFAULT) {
+            double durAdj = vaccine.getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_ADJ_INF_DUR_DEFAULT];
+            if (durAdj >= 0) {
+                person.setTimeUntilNextStage(site, person.getTimeUntilNextStage(site) * durAdj);
+            }
+        }
     }
 
     private void screenPerson(RelationshipPerson_MSM msm, int screenType) {
@@ -821,10 +848,10 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
             if (currentlyVaccinated == null || !currentlyVaccinated.containsKey(msm.getId())) {
                 if (vacc instanceof SiteSpecificVaccination) {
                     SiteSpecificVaccination ssv = (SiteSpecificVaccination) vacc;
-                    double propVaccThruScreening = -ssv.getParameters()[SiteSpecificVaccination.EFFECT_INDEX_PROPORTION_VACC_ENT_POP];
+                    double propVaccThruScreening = -ssv.getParameters()[SiteSpecificVaccination.EFFECT_INDEX_PROPORTION_VACC_COVERAGE_SETTING];
                     if (propVaccThruScreening > 0) {
                         if (getRNG().nextDouble() < propVaccThruScreening) {
-                            vaccinePerson(vacc, msm);
+                            vaccinatePerson(vacc, msm);
                         }
                     }
                 }
@@ -951,12 +978,21 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         person.incrementTime(deltaT, infList);
         int[] afterInfectStat = person.getInfectionStatus();
 
+        boolean[] justBecomeInfectious = new boolean[infList.length];
+        Arrays.fill(justBecomeInfectious, false);
+
         boolean justDevelopedSym = false;
         double symDur = Double.POSITIVE_INFINITY;
 
         boolean symSubside = false;
 
         for (int i = 0; i < preInfectStat.length; i++) {
+
+            justBecomeInfectious[i]
+                    = (preInfectStat[i] != GonorrhoeaSiteInfection.STATUS_SYM
+                    && preInfectStat[i] != GonorrhoeaSiteInfection.STATUS_ASY)
+                    && infList[i].isInfectious(person);
+
             justDevelopedSym |= preInfectStat[i] != GonorrhoeaSiteInfection.STATUS_SYM
                     && afterInfectStat[i] == GonorrhoeaSiteInfection.STATUS_SYM;
 
@@ -967,7 +1003,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 symDur = Math.min(symDur, person.getTimeUntilNextStage(i));
             }
 
-        }
+        }                     
         if (justDevelopedSym) {
             // Possibly reducing duration of other sites as well
             for (int i = 0; i < preInfectStat.length; i++) {
@@ -983,6 +1019,28 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 }
             }
         }
+        // Effect of Vaccination
+        if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] != null
+                && getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
+            HashMap<Integer, int[]> currentVaccinated = (HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED];
+            SiteSpecificVaccination vaccine = (SiteSpecificVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION];
+            int[] vacRes = currentVaccinated.get(person.getId());
+
+            if (vacRes != null) {
+                if (person.getAge() < vacRes[VACC_SETTING_AGE_EXPIRY]) { // Active vaccine
+                    // Just become infectious 
+                    for (int site = 0; site < getInfList().length; site++) {
+                        if (justBecomeInfectious[site]) {
+                            vaccine_effect_adj_infection_duration(vaccine, person, site);
+                        }
+                        if (justDevelopedSym && getInfList()[site].hasSymptoms(person)) {
+                            vaccine_effect_remove_symptom(vaccine, person, site);
+                        }
+
+                    }
+                }
+            }
+        }
 
         if (symSubside) {
             treatPerson((RelationshipPerson_MSM) person);
@@ -990,6 +1048,35 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         return infList;
 
+    }
+
+    protected boolean vaccine_effect_remove_symptom(SiteSpecificVaccination vaccine, AbstractIndividualInterface person, int site) {
+        boolean removeSym = false;
+        if (vaccine.getParameters().length > SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD) {
+            double sym_adj = vaccine.getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_RATE_DEFAULT];
+            if (sym_adj > 0) {
+                removeSym = sym_adj >= 1;
+                if (sym_adj < 1) {
+                    removeSym = getInfList()[site].getRNG().nextDouble() < sym_adj;
+                }
+                if (removeSym) {
+                    person.getInfectionStatus()[site] = (int) vaccine.getParameters()[OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT];
+                    double newDuration = vaccine.getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_MEDIAN];
+                    if (vaccine.getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD] > 0) {
+                        if (vaccine_remove_sym_infect_duration == null) {
+                            double[] ent = StaticMethods.generatedGammaParam(new double[]{newDuration,
+                                vaccine.getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD]});
+                            vaccine_remove_sym_infect_duration = new GammaDistribution(ent[0], 1/ent[1]);
+                        }
+                        newDuration = (int) Math.round(vaccine_remove_sym_infect_duration.sample());
+                        
+                        person.setTimeUntilNextStage(site, newDuration);
+                        
+                    }
+                }
+            }
+        }
+        return removeSym;
     }
 
     @Override
@@ -1020,7 +1107,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 }
 
                 if (vacState != null
-                        && (vacState[VACC_SETTING_AGE_EXPIRY] < 0 || vacState[VACC_SETTING_AGE_EXPIRY] > person[p].getAge())) {
+                        && (vacState[VACC_SETTING_AGE_EXPIRY] < 0
+                        || vacState[VACC_SETTING_AGE_EXPIRY] > person[p].getAge())) {
                     vaccineImpact[p] = vacc.vaccineImpact(person[p], null);
                 } else {
                     vaccineImpact[p] = null;
