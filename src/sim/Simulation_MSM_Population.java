@@ -1003,8 +1003,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 File tempFile = util.FileZipper.unzipFile(decodedSnapFileZip, exportDir);
                 tempFile.renameTo(decodedSnapFile);
                 tempFile.delete();
-                
-             
 
             }
 
@@ -1046,7 +1044,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         }
 
                     } else {
-                        String[] ent = line.split(",");                        
+                        String[] ent = line.split(",");
                         int numCasual6Months = Integer.parseInt(ent[index_numCasIn6Month]);
                         int[] infStat = new int[(ent.length - index_inf_offset) / 2];
                         int[] strainStat = new int[infStat.length];
@@ -1079,6 +1077,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                     }
 
+                }
+
+                if (decodedSnapFileZip.exists()) {
+                    decodedSnapFile.delete();
                 }
 
             } else { // Do it directly from pop file
@@ -1146,8 +1148,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
             }
             res[5] = vaccinate_stat;
 
-            System.out.println("Analysing pop file " + popFile.getName() + " completed.");
-
+            //System.out.println("Analysing pop file " + popFile.getName() + " completed.");
             return res;
         }
 
@@ -1216,14 +1217,14 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 return file.isDirectory() && file.getName().startsWith(EXPORT_PREFIX);
             }
         });
-        
-        Arrays.sort(exportFolders,new Comparator<File>() {
+
+        Arrays.sort(exportFolders, new Comparator<File>() {
             @Override
             public int compare(File t, File t1) {
-                return Integer.compare(Integer.parseInt(t.getName().substring(EXPORT_PREFIX.length())), 
-                        Integer.parseInt(t1.getName().substring(EXPORT_PREFIX.length()))); 
+                return Integer.compare(Integer.parseInt(t.getName().substring(EXPORT_PREFIX.length())),
+                        Integer.parseInt(t1.getName().substring(EXPORT_PREFIX.length())));
             }
-        });        
+        });
 
         if (specific_dir != null) {
             exportFolders = new File[specific_dir.length];
@@ -1292,7 +1293,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     });
 
                 }
-                
+
                 final boolean APPEND_PRI = false;
 
                 System.out.println("Analysing " + popFiles.length + " pop file"
@@ -1314,19 +1315,19 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 PrintWriter pri_numPartnerLast6Months = new PrintWriter(
                         new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]), APPEND_PRI));
 
-                if (!prePrintExist[FILE_NUM_PARTERS_IN_LAST_6_MONTHS]|| !APPEND_PRI) {
+                if (!prePrintExist[FILE_NUM_PARTERS_IN_LAST_6_MONTHS] || !APPEND_PRI) {
                     pri_numPartnerLast6Months.println("Sim, Num casual partners in last 6 months, Freq, Freq (infected), Freq (new strain)");
                 }
 
                 PrintWriter pri_newStrainHasRegPartner = new PrintWriter(
                         new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_NEW_STRAIN_HAS_REG_PARTNERS]), APPEND_PRI));
-                if (!prePrintExist[FILE_NEW_STRAIN_HAS_REG_PARTNERS]|| !APPEND_PRI) {
+                if (!prePrintExist[FILE_NEW_STRAIN_HAS_REG_PARTNERS] || !APPEND_PRI) {
                     pri_newStrainHasRegPartner.println("Sim, Num of Reg for those with new strain");
                 }
 
                 PrintWriter pri_vaccine_stat = new PrintWriter(new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_VACCINATE_STAT]), APPEND_PRI));
 
-                if (!prePrintExist[FILE_VACCINATE_STAT]|| !APPEND_PRI) {
+                if (!prePrintExist[FILE_VACCINATE_STAT] || !APPEND_PRI) {
                     pri_vaccine_stat.println("Sim, Unvaccinated, Vaccinated - active, Vaccinated - expired");
                 }
 
@@ -1352,8 +1353,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     if (!prePrintExist[FILE_INFECTION_STAT_CSV]
                             || popId >= popId_range[0] && popId < popId_range[1]) {
 
-                        System.out.println("Submitting thread to analysis pop file " + popFile.getName());
-
+                        //System.out.println("Submitting thread to analysis pop file " + popFile.getName());
                         if (threadpool == null) {
                             //threadpool = Executors.newFixedThreadPool(1);
                             threadpool = Executors.newFixedThreadPool(THREAD_POOLSIZE);
