@@ -1221,8 +1221,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
         Arrays.sort(exportFolders, new Comparator<File>() {
             @Override
             public int compare(File t, File t1) {
-                return Integer.compare(Integer.parseInt(t.getName().substring(EXPORT_PREFIX.length())),
-                        Integer.parseInt(t1.getName().substring(EXPORT_PREFIX.length())));
+                return Integer.compare(Integer.parseInt(t.getName().substring(EXPORT_PREFIX.length()).replaceAll("\\D+", "")),
+                        Integer.parseInt(t1.getName().substring(EXPORT_PREFIX.length()).replaceAll("\\D+", "")));
             }
         });
 
@@ -1336,7 +1336,9 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 ExecutorService threadpool = null;
                 int inThreadPool = 0;
                 java.util.concurrent.Future<int[][]>[] result_Map = new java.util.concurrent.Future[popFiles.length];
-                int exportedSoFar = 0;
+
+                boolean[] exportedSoFar = new boolean[popFiles.length];
+
                 int THREAD_POOLSIZE = Runtime.getRuntime().availableProcessors();
 
                 for (File popFile : popFiles) {
@@ -1361,6 +1363,11 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         }
 
                         Callable_decodeExportPop thread = new Callable_decodeExportPop(popFile, exportDir, p);
+                        if (popId >= result_Map.length) {
+                            result_Map = Arrays.copyOf(result_Map, popId + 1);
+                            exportedSoFar = Arrays.copyOf(exportedSoFar, popId + 1);
+                        }
+
                         result_Map[popId] = threadpool.submit(thread);
                         inThreadPool++;
 
@@ -1392,8 +1399,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     }
 
-    private static int exeutePopDecodeThread(ExecutorService threadpool,
-            int exportedSoFar, Future<int[][]>[] result_Map,
+    private static boolean[] exeutePopDecodeThread(ExecutorService threadpool,
+            boolean[] exportedSoFar, Future<int[][]>[] result_Map,
             PrintWriter[] writers) {
 
         PrintWriter pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner, pri_vaccination_stat;
@@ -1417,70 +1424,76 @@ public class Simulation_MSM_Population implements SimulationInterface {
             System.err.println(str.toString());
         }
 
-        while (exportedSoFar < result_Map.length && result_Map[exportedSoFar] != null) {
-            java.util.concurrent.Future<int[][]> resFuture = result_Map[exportedSoFar];
-            try {
-                int[][] res = resFuture.get();
-                int[] count = res[0];
-                int[] map_NumberCasual6Months = res[1];
-                int[] map_NumberCasual6MonthInfected = res[2];
-                int[] map_NumberCasual6MonthInfectedNewStrain = res[3];
-                int[] newStrainHasReg = res[4];
-                int[] vaccStat = res[5];
+        for (int i = 0; i < exportedSoFar.length; i++) {
+            if (!exportedSoFar[i]) {
+                java.util.concurrent.Future<int[][]> resFuture = result_Map[i];
+                if (resFuture != null) {
+                    try {
+                        int[][] res = resFuture.get();
+                        int[] count = res[0];
+                        int[] map_NumberCasual6Months = res[1];
+                        int[] map_NumberCasual6MonthInfected = res[2];
+                        int[] map_NumberCasual6MonthInfectedNewStrain = res[3];
+                        int[] newStrainHasReg = res[4];
+                        int[] vaccStat = res[5];
 
-                if (newStrainHasReg.length == 0) {
-                    newStrainHasReg = new int[]{-1};
+                        if (newStrainHasReg.length == 0) {
+                            newStrainHasReg = new int[]{-1};
+                        }
+
+                        pri_inf_stat.print(i);
+                        for (int c = 1; c < count.length; c++) {
+                            pri_inf_stat.print(',');
+                            pri_inf_stat.print(count[c]);
+
+                        }
+                        pri_inf_stat.println();
+                        pri_inf_stat.flush();
+
+                        for (int c = 1; c < map_NumberCasual6Months.length; c++) {
+                            pri_numPartnerLast6Months.print(i);
+                            pri_numPartnerLast6Months.print(',');
+                            pri_numPartnerLast6Months.print(c);
+                            pri_numPartnerLast6Months.print(',');
+                            pri_numPartnerLast6Months.print(map_NumberCasual6Months[c]);
+                            pri_numPartnerLast6Months.print(',');
+                            pri_numPartnerLast6Months.print(map_NumberCasual6MonthInfected[c]);
+                            pri_numPartnerLast6Months.print(',');
+                            pri_numPartnerLast6Months.println(map_NumberCasual6MonthInfectedNewStrain[c]);
+                        }
+
+                        pri_numPartnerLast6Months.flush();
+
+                        pri_newStrainHasRegPartner.print(i);
+                        for (int k = 0; k < newStrainHasReg.length; k++) {
+                            pri_newStrainHasRegPartner.print(',');
+                            pri_newStrainHasRegPartner.print(newStrainHasReg[k]);
+                        }
+                        pri_newStrainHasRegPartner.println();
+                        pri_newStrainHasRegPartner.flush();
+
+                        pri_vaccination_stat.print(i);
+                        for (int k = 0; k < vaccStat.length; k++) {
+                            pri_vaccination_stat.print(',');
+                            pri_vaccination_stat.print(vaccStat[k]);
+                        }
+                        pri_vaccination_stat.println();
+                        pri_vaccination_stat.flush();
+
+                    } catch (InterruptedException | ExecutionException ex) {
+                        StringWriter str = new StringWriter();
+                        try (PrintWriter wri = new PrintWriter(str)) {
+                            ex.printStackTrace(wri);
+                        }
+                        System.err.println(str.toString());
+
+                    }
+
+                    exportedSoFar[i] = true;
                 }
-
-                pri_inf_stat.print(exportedSoFar);
-                for (int c = 1; c < count.length; c++) {
-                    pri_inf_stat.print(',');
-                    pri_inf_stat.print(count[c]);
-
-                }
-                pri_inf_stat.println();
-                pri_inf_stat.flush();
-
-                for (int c = 1; c < map_NumberCasual6Months.length; c++) {
-                    pri_numPartnerLast6Months.print(exportedSoFar);
-                    pri_numPartnerLast6Months.print(',');
-                    pri_numPartnerLast6Months.print(c);
-                    pri_numPartnerLast6Months.print(',');
-                    pri_numPartnerLast6Months.print(map_NumberCasual6Months[c]);
-                    pri_numPartnerLast6Months.print(',');
-                    pri_numPartnerLast6Months.print(map_NumberCasual6MonthInfected[c]);
-                    pri_numPartnerLast6Months.print(',');
-                    pri_numPartnerLast6Months.println(map_NumberCasual6MonthInfectedNewStrain[c]);
-                }
-
-                pri_numPartnerLast6Months.flush();
-
-                pri_newStrainHasRegPartner.print(exportedSoFar);
-                for (int k = 0; k < newStrainHasReg.length; k++) {
-                    pri_newStrainHasRegPartner.print(',');
-                    pri_newStrainHasRegPartner.print(newStrainHasReg[k]);
-                }
-                pri_newStrainHasRegPartner.println();
-                pri_newStrainHasRegPartner.flush();
-
-                pri_vaccination_stat.print(exportedSoFar);
-                for (int k = 0; k < vaccStat.length; k++) {
-                    pri_vaccination_stat.print(',');
-                    pri_vaccination_stat.print(vaccStat[k]);
-                }
-                pri_vaccination_stat.println();
-                pri_vaccination_stat.flush();
-
-            } catch (InterruptedException | ExecutionException ex) {
-                StringWriter str = new StringWriter();
-                try (PrintWriter wri = new PrintWriter(str)) {
-                    ex.printStackTrace(wri);
-                }
-                System.err.println(str.toString());
 
             }
 
-            exportedSoFar++;
         }
 
         return exportedSoFar;

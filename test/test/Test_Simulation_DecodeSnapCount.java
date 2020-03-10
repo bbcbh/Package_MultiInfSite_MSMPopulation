@@ -15,7 +15,7 @@ public class Test_Simulation_DecodeSnapCount {
         File singleSimFolder = new File(
                                       //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Results_Analyse\\Import_1_A_R_B2_10000");                                      
                                       //"C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\Test\\Import_1_A_R_Pop_100000");
-                                      "C:\\Users\\Bhui\\OneDrive - UNSW\\MSM_MulitSite\\NG Vacc\\Vacc_C10_S000_T050_D720");
+                                      "C:\\Users\\Bhui\\Desktop\\FTP\\MSM\\Vacc_NG_ST_MAP_Completed\\Vacc_C30_S070_T000");
 
         Simulation_MSM_Population sim = new Simulation_MSM_Population();
 

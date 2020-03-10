@@ -89,6 +89,7 @@ public class SinglePopRunnable implements Runnable {
     private final HashMap<Integer, Integer> infectionPreExposeMap = new HashMap(); // infection_id, days
 
     public static final String EXPORT_PREFIX = "export_";
+    public static final String EXPORT_FORCED_PREFIX = "forced_";
     public static final String EXPORT_INDIV_PREFIX = "IndivdualSnap_";
     private int[] exportAt = null;
     private int exportAtPt = 0;
@@ -348,8 +349,10 @@ public class SinglePopRunnable implements Runnable {
 
                 if (forced || (exportAtPt < exportAt.length
                         && Math.abs(exportAt[exportAtPt]) == getPopulation().getGlobalTime())) {
+                    
+                    String prefix = forced?  EXPORT_FORCED_PREFIX:"";                                                            
 
-                    File exportPopFileDir = new File(baseDir, EXPORT_PREFIX + Integer.toString(getPopulation().getGlobalTime()));
+                    File exportPopFileDir = new File(baseDir, prefix + EXPORT_PREFIX + Integer.toString(getPopulation().getGlobalTime()));
                     exportPopFileDir.mkdirs();
 
                     File exportPopFileZip = new File(exportPopFileDir, SimulationInterface.POP_FILE_PREFIX + getId() + ".zip");
@@ -970,7 +973,7 @@ public class SinglePopRunnable implements Runnable {
                             if (exportAt != null) {
                                 exportPopAt(true);
                             }
-                            break runSim;
+                            //break runSim;
 
                         }
 
