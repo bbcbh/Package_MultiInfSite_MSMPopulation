@@ -779,16 +779,19 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 vacSetting[VACC_SETTING_AGE_EXPIRY] = -1; // -1 = lifelong;
 
                 if (vaccine instanceof SiteSpecificVaccination) {
-
                     if (vaccine.getParameters().length > SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION_DEFAULT) {
-                        if (vaccine_duration_dist == null) {
-                            double defaultDuration = ((SiteSpecificVaccination) vaccine).getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION_DEFAULT];
-                            vaccine_duration_dist = new ExponentialDistribution(getRNG(), defaultDuration);
+                        double defaultDuration = ((SiteSpecificVaccination) vaccine).getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION_DEFAULT];
 
+                        if (defaultDuration > 0) {
+                            if (vaccine_duration_dist == null) {
+
+                                vaccine_duration_dist = new ExponentialDistribution(getRNG(), defaultDuration);
+
+                            }
+                            vacSetting[VACC_SETTING_AGE_EXPIRY] = (int) Math.round(person.getAge() + vaccine_duration_dist.sample());
                         }
-                        vacSetting[VACC_SETTING_AGE_EXPIRY] = (int) Math.round(person.getAge() + vaccine_duration_dist.sample());
                     }
-                    
+
                     // Immediate vaccine effect 
                     for (int site = 0; site < getInfList().length; site++) {
                         if (getInfList()[site].isInfectious(person)) {
@@ -1003,7 +1006,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 symDur = Math.min(symDur, person.getTimeUntilNextStage(i));
             }
 
-        }                     
+        }
         if (justDevelopedSym) {
             // Possibly reducing duration of other sites as well
             for (int i = 0; i < preInfectStat.length; i++) {
@@ -1066,12 +1069,12 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                         if (vaccine_remove_sym_infect_duration == null) {
                             double[] ent = StaticMethods.generatedGammaParam(new double[]{newDuration,
                                 vaccine.getParameters()[SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD]});
-                            vaccine_remove_sym_infect_duration = new GammaDistribution(ent[0], 1/ent[1]);
+                            vaccine_remove_sym_infect_duration = new GammaDistribution(ent[0], 1 / ent[1]);
                         }
                         newDuration = (int) Math.round(vaccine_remove_sym_infect_duration.sample());
-                        
+
                         person.setTimeUntilNextStage(site, newDuration);
-                        
+
                     }
                 }
             }
