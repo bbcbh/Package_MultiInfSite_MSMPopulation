@@ -127,7 +127,7 @@ public class SinglePopRunnable implements Runnable {
     double[][] vaccineSettingAll;
     public static final int VACCINE_SETTING_LENGTH = 0;
     public static final int VACCINE_START_TIME = VACCINE_SETTING_LENGTH + 1;
-    public static final int VACCINE_END_TIME = VACCINE_START_TIME + 1;
+    public static final int VACCINE_END_TIME = VACCINE_START_TIME + 1; // re-vaccine booster time if end time  < 0,
 
     public void setVaccineSetting(double[][] vaccineSetting) {
         this.vaccineSettingAll = vaccineSetting;
@@ -349,8 +349,8 @@ public class SinglePopRunnable implements Runnable {
 
                 if (forced || (exportAtPt < exportAt.length
                         && Math.abs(exportAt[exportAtPt]) == getPopulation().getGlobalTime())) {
-                    
-                    String prefix = forced?  EXPORT_FORCED_PREFIX:"";                                                            
+
+                    String prefix = forced ? EXPORT_FORCED_PREFIX : "";
 
                     File exportPopFileDir = new File(baseDir, prefix + EXPORT_PREFIX + Integer.toString(getPopulation().getGlobalTime()));
                     exportPopFileDir.mkdirs();
@@ -701,6 +701,7 @@ public class SinglePopRunnable implements Runnable {
                             if (getPopulation().getGlobalTime() == vaccSetting[VACCINE_START_TIME]) {
                                 SiteSpecificVaccination vacc;
                                 int settingStart = vaccSetting.length - (int) vaccSetting[VACCINE_SETTING_LENGTH];
+
                                 vacc = new SiteSpecificVaccination(Arrays.copyOfRange(vaccSetting, settingStart, vaccSetting.length),
                                         new int[]{(int) vaccSetting[VACCINE_START_TIME], (int) vaccSetting[VACCINE_END_TIME]});
                                 getPopulation().setParameter("Vaccine_site_specific", MSMPopulation.MSM_SITE_SPECIFIC_VACCINATION, vacc);

@@ -27,6 +27,8 @@ import util.PersonClassifier;
 import util.StaticMethods;
 import population.person.MultiSiteMultiStrainPersonInterface;
 import static infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT;
+import java.util.ArrayList;
+import sim.SinglePopRunnable;
 
 /**
  * @author Ben Hui
@@ -145,7 +147,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int MSM_USE_GLOBAL_CASUAL_LIMIT = MSM_SYM_TREATMENT_PROB + 1;
     public static final int MSM_SITE_SPECIFIC_VACCINATION = MSM_USE_GLOBAL_CASUAL_LIMIT + 1;
     public static final int MSM_SITE_CURRENTLY_VACCINATED = MSM_SITE_SPECIFIC_VACCINATION + 1;
-    public static final int LENGTH_FIELDS_MSM_POP = MSM_SITE_CURRENTLY_VACCINATED + 1;
+    public static final int MSM_SITE_VACC_BOOSTER_SCHEDULE = MSM_SITE_CURRENTLY_VACCINATED + 1;
+    public static final int LENGTH_FIELDS_MSM_POP = MSM_SITE_VACC_BOOSTER_SCHEDULE + 1;
 
     public static final Object[] DEFAULT_MSM_FIELDS = {
         // Min/max for anal and oral sex for reg (per day) and causal relationship (per partnership), from 
@@ -217,7 +220,11 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         null,
         // MSM_SITE_CURRENTLY_VACCINATED
         // HashMap<Integer, int[]> currentlyVaccinated of ID, VACC_SETTING if applied
-        null,};
+        new HashMap<Integer, int[]>(),
+        // MSM_SITE_VACC_BOOSTER_SCHEDULE
+        // HashMap<Integer, ArrayList<Integer>> global_time, list of id who receive booseter 
+        new HashMap<Integer, ArrayList<Integer>>(),};
+
     public static final int[] AGE_RANGE = {(int) (16 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT),
         (int) (80 * AbstractRegCasRelMapPopulation.ONE_YEAR_INT)
     };
@@ -507,6 +514,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         int casualPart_Total = 0;
         int regOnlyTotal = 0;
 
+        AbstractVaccination vacc = ((AbstractVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION]);
+
         for (int p = 0; p < getPop().length; p++) {
             RelationshipPerson_MSM person = (RelationshipPerson_MSM) getPop()[p];
             incrementPersonStat(person, deltaT);
@@ -534,8 +543,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 person = newP;
                 getFields()[FIELDS_NEXT_ID] = nextId + 1;
 
-                if (getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
-                    AbstractVaccination vacc = ((AbstractVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION]);
+                if (vacc != null) {
 
                     if (vacc instanceof SiteSpecificVaccination) {
                         SiteSpecificVaccination ssv = (SiteSpecificVaccination) vacc;
@@ -753,6 +761,14 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         }
 
+        HashMap<Integer, ArrayList<Integer>> booster
+                = (HashMap<Integer, ArrayList<Integer>>) getFields()[MSM_SITE_VACC_BOOSTER_SCHEDULE];
+
+        ArrayList<Integer> boosterSchedule = booster.remove(getGlobalTime());
+        for (int boosterId : boosterSchedule) {
+            vaccinatePerson(vacc, getLocalData().get(boosterId));
+        }
+
         for (RelationshipPerson_MSM removePerson : toBeRemoved) {
             for (RelationshipMap relMap : getRelMap()) {
                 if (relMap.containsVertex(removePerson.getId())) {
@@ -775,6 +791,22 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
                 vaccine.vaccinatePerson(person);
 
+                // Test booster
+                int[] vTime = vaccine.getValidTime();
+                if (vTime[SinglePopRunnable.VACCINE_END_TIME] < 0) {
+                    HashMap<Integer, ArrayList<Integer>> booster
+                            = (HashMap<Integer, ArrayList<Integer>>) getFields()[MSM_SITE_VACC_BOOSTER_SCHEDULE];
+                    int boosterTime = getGlobalTime() + -vTime[SinglePopRunnable.VACCINE_END_TIME];
+
+                    ArrayList<Integer> ent = booster.get(boosterTime);
+
+                    if (ent == null) {
+                        ent = new ArrayList<>();
+                        booster.put(boosterTime, ent);
+                    }
+                    ent.add(person.getId());
+                }
+
                 int[] vacSetting = new int[VACC_SETTING_LENGTH];
                 vacSetting[VACC_SETTING_AGE_EXPIRY] = -1; // -1 = lifelong;
 
@@ -784,9 +816,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
                         if (defaultDuration > 0) {
                             if (vaccine_duration_dist == null) {
-
                                 vaccine_duration_dist = new ExponentialDistribution(getRNG(), defaultDuration);
-
                             }
                             vacSetting[VACC_SETTING_AGE_EXPIRY] = (int) Math.round(person.getAge() + vaccine_duration_dist.sample());
                         }
