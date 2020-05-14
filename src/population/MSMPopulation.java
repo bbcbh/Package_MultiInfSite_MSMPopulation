@@ -765,8 +765,10 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                 = (HashMap<Integer, ArrayList<Integer>>) getFields()[MSM_SITE_VACC_BOOSTER_SCHEDULE];
 
         ArrayList<Integer> boosterSchedule = booster.remove(getGlobalTime());
-        for (int boosterId : boosterSchedule) {
-            vaccinatePerson(vacc, getLocalData().get(boosterId));
+        if (boosterSchedule != null) {
+            for (int boosterId : boosterSchedule) {
+                vaccinatePerson(vacc, getLocalData().get(boosterId));
+            }
         }
 
         for (RelationshipPerson_MSM removePerson : toBeRemoved) {
@@ -782,7 +784,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     }
 
     protected void vaccinatePerson(AbstractVaccination vaccine, AbstractIndividualInterface person) {
-        if (vaccine != null) {
+        if (vaccine != null && person != null) {
             if (vaccine.vaccinationApplicableAt(getGlobalTime())) {
                 if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] == null) {
                     HashMap<Integer, int[]> currentVaccinated = new HashMap<>();
@@ -793,10 +795,10 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
                 // Test booster
                 int[] vTime = vaccine.getValidTime();
-                if (vTime[SinglePopRunnable.VACCINE_END_TIME] < 0) {
+                if (vTime[vTime.length-1] < 0) {
                     HashMap<Integer, ArrayList<Integer>> booster
                             = (HashMap<Integer, ArrayList<Integer>>) getFields()[MSM_SITE_VACC_BOOSTER_SCHEDULE];
-                    int boosterTime = getGlobalTime() + -vTime[SinglePopRunnable.VACCINE_END_TIME];
+                    int boosterTime = getGlobalTime() + -vTime[vTime.length-1];
 
                     ArrayList<Integer> ent = booster.get(boosterTime);
 

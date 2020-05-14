@@ -143,13 +143,24 @@ public class Simulation_MSM_Population implements SimulationInterface {
     private int maxThreads = Math.max(Runtime.getRuntime().availableProcessors(), 1);
     // Prextract 
     private Object[][] preExtractField = null;
-
     private boolean useImportIOThread = true;
 
-    public final static Pattern Pattern_importFile = Pattern.compile("pop_(\\d+).zip");
-    public final static Pattern Pattern_popStat = Pattern.compile(SinglePopRunnable.EXPORT_INDIV_PREFIX + "(\\d+).csv(.zip)?");
+    public final static Pattern PATTERN_IMPORT_FILE = Pattern.compile("pop_(\\d+).zip");
+    public final static Pattern PATTERN_POP_STAT = Pattern.compile(SinglePopRunnable.EXPORT_INDIV_PREFIX + "(\\d+).csv(.zip)?");
 
     private String simCustomParameterStr = null;
+    private String simExtraFlags = "";
+
+    public final static String FLAG_NO_REMOVAL = "-noFileRemoval";
+    public final static String FLAG_CLEAR_PREVIOUS_RESULTS = "-clearPrevResult";
+    
+    public String getSimExtraFlags() {
+        return simExtraFlags;
+    }
+
+    public void setSimExtraFlags(String simExtraFlags) {
+        this.simExtraFlags = simExtraFlags;
+    }
 
     public String getSimCustomParameterStr() {
         return simCustomParameterStr;
@@ -238,7 +249,21 @@ public class Simulation_MSM_Population implements SimulationInterface {
     }
 
     @Override
-    public void generateOneResultSet() throws IOException, InterruptedException {
+    public void generateOneResultSet() throws IOException, InterruptedException {        
+        if(getSimExtraFlags().contains(FLAG_CLEAR_PREVIOUS_RESULTS)){
+           File[] delFile = baseDir.listFiles(new FileFilter() {
+               @Override
+               public boolean accept(File pathname) {
+                   return !pathname.getName().endsWith(".prop");
+                   
+               }
+           });
+           for(File f : delFile){
+               f.delete();
+           }                        
+        }
+        
+        
         int simSoFar = 0;
 
         int numProcess = maxThreads;
@@ -275,7 +300,6 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
         numSimTotal = ((Number) propVal[PROP_NUM_SIM_PER_SET]).intValue();
 
-        int rngCallCounter = 0;
         rng = new random.MersenneTwisterRandomGenerator(((Number) propVal[PROP_BASESEED]).longValue());
 
         boolean usingImportPop = propVal[PROP_POP_IMPORT_PATH] != null && !((String) propVal[PROP_POP_IMPORT_PATH]).isEmpty();
@@ -519,7 +543,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                     if (!useImport) {
                         System.out.println("Thread #" + (threadCounter - 1) + " generated with seed of " + runnable[r].getPopulation().getSeed());
-                        rngCallCounter++;
+
                         runnable[r].model_prop_initialise(((Number) propVal[PROP_BURNIN]).intValue(), propModelInit);
 
                     }
@@ -657,25 +681,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
     protected void finalise(int simSoFar) throws IOException {
         try {
             StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_END_NUM_INF]), simSoFar);
-            StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EXTINCT_AT]), simSoFar);
-
-            // Zipping all directory
-            File[] exportDirs = baseDir.listFiles(new FileFilter() {
-                @Override
-                public boolean accept(File file) {
-                    return file.isDirectory() && !file.getName().startsWith(EXPORT_PREFIX);
-                }
-            });
-
-            for (File dir : exportDirs) {
-                util.FileZipper.zipFile(dir, new File(baseDir, dir.getName() + ".zip"));
-                File[] allFiles = dir.listFiles();
-
-                for (File f : allFiles) {
-                    f.delete();
-                }
-                Files.delete(dir.toPath());
-            }
+            StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EXTINCT_AT]), simSoFar);            
 
         } catch (ClassNotFoundException ex) {
             System.err.println(getClass().getName() + ".generateOneResultSet: Error - corrupted data file");
@@ -1078,6 +1084,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     }
 
                 }
+                csv.close();
 
                 if (decodedSnapFileZip.exists()) {
                     decodedSnapFile.delete();
@@ -1249,7 +1256,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 popFiles = exportDir.listFiles(new FileFilter() {
                     @Override
                     public boolean accept(File file) {
-                        Matcher m = Pattern_popStat.matcher(file.getName());
+                        Matcher m = PATTERN_POP_STAT.matcher(file.getName());
                         return m.find();
                     }
                 });
@@ -1257,8 +1264,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 Arrays.sort(popFiles, new Comparator<File>() {
                     @Override
                     public int compare(File f1, File f2) {
-                        Matcher m1 = Pattern_popStat.matcher(f1.getName());
-                        Matcher m2 = Pattern_popStat.matcher(f2.getName());
+                        Matcher m1 = PATTERN_POP_STAT.matcher(f1.getName());
+                        Matcher m2 = PATTERN_POP_STAT.matcher(f2.getName());
                         m1.find();
                         m2.find();
                         Integer n1 = new Integer(m1.group(1));
@@ -1274,7 +1281,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     popFiles = exportDir.listFiles(new FileFilter() {
                         @Override
                         public boolean accept(File file) {
-                            Matcher m = Pattern_importFile.matcher(file.getName());
+                            Matcher m = PATTERN_IMPORT_FILE.matcher(file.getName());
                             return m.find();
                         }
                     });
@@ -1282,8 +1289,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     Arrays.sort(popFiles, new Comparator<File>() {
                         @Override
                         public int compare(File f1, File f2) {
-                            Matcher m1 = Pattern_importFile.matcher(f1.getName());
-                            Matcher m2 = Pattern_importFile.matcher(f2.getName());
+                            Matcher m1 = PATTERN_IMPORT_FILE.matcher(f1.getName());
+                            Matcher m2 = PATTERN_IMPORT_FILE.matcher(f2.getName());
                             m1.find();
                             m2.find();
                             Integer n1 = new Integer(m1.group(1));
@@ -1343,10 +1350,10 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                 for (File popFile : popFiles) {
                     Pattern p;
-                    if (Pattern_popStat.matcher(popFile.getName()).matches()) {
-                        p = Pattern_popStat;
+                    if (PATTERN_POP_STAT.matcher(popFile.getName()).matches()) {
+                        p = PATTERN_POP_STAT;
                     } else {
-                        p = Pattern_importFile;
+                        p = PATTERN_IMPORT_FILE;
                     }
                     Matcher m = p.matcher(popFile.getName());
                     m.find();
