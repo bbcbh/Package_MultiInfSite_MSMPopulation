@@ -787,7 +787,7 @@ public class SinglePopRunnable implements Runnable {
                         }
                     }
 
-                    if (snapClassifiers[s] != null && f == snapFreq - 1) {
+                    if (s < snapClassifiers.length && snapClassifiers[s] != null && f == snapFreq - 1) {
                         // Set up instant count if needed
                         for (int c = 0; c < snapClassifiers[s].length; c++) {
                             if (!cummulativeSnap[s][c]) {

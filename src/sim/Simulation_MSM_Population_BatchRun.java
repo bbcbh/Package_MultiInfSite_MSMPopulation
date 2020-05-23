@@ -133,124 +133,130 @@ public class Simulation_MSM_Population_BatchRun {
                 run.runOptimisation();
 
             } else {
-                System.out.println("Generate results set for " + propFile.toFile().getParentFile().getAbsolutePath());
-
-                if (sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER] != null) {
-                    sim.setSimCustomParameterStr(sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER].toString());
-                }
-
-                sim.generateOneResultSet();
-                sim.decodeSnapCountFile();
-
-                Simulation_MSM_Population.decodeExportedPopulationFiles(new File(baseDir, singleSimFolder), null);
-
-                // Zipping and clean up
                 File simBaseDir = new File(baseDir, singleSimFolder);
-
-                boolean zipOkay_DIR = false;
-                boolean zipOkay_CSV = false;
-                boolean zipOkay_OBJ = false;
-
-                // Zipping all directory
-                File[] exportDirs = simBaseDir.listFiles(new FileFilter() {
-                    @Override
-                    public boolean accept(File file) {
-                        return file.isDirectory();
-                    }
-                });
-                try {
-
-                    for (File dir : exportDirs) {
-                        util.FileZipper.zipFile(dir, new File(simBaseDir, dir.getName() + ".zip"));
-                    }
-
-                    zipOkay_DIR = true;
-                } catch (IOException ex) {
-                    ex.printStackTrace(System.err);
-                }
-
-                // Zipping of CSV file
-                File[] csvFile = simBaseDir.listFiles(new FileFilter() {
-                    @Override
-                    public boolean accept(File pathname) {
-                        return pathname.getName().endsWith(".csv");
-                    }
-                });
-
-                File zipCSV = new File(simBaseDir, "CSV_Files.zip");
-                try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipCSV))) {
-                    for (File csv : csvFile) {
-                        ZipEntry zEnt = new ZipEntry(csv.getName());
-                        zos.putNextEntry(zEnt);
-                        byte[] data = Files.readAllBytes(csv.toPath());
-                        zos.write(data, 0, data.length);
-                        zos.closeEntry();
-                    }
-
-                    zipOkay_CSV = true;
-                } catch (IOException ex) {
-                    ex.printStackTrace(System.err);
-                }
-                
-                
-                
-                // Zipping of CSV file
-                File[] objFile = simBaseDir.listFiles(new FileFilter() {
-                    @Override
-                    public boolean accept(File pathname) {
-                        return pathname.getName().endsWith(".obj");
-                    }
-                });
-
                 File zipOBJ = new File(simBaseDir, "OBJ_Files.zip");
-                try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipOBJ))) {
-                    for (File obj : objFile) {
-                        ZipEntry zEnt = new ZipEntry(obj.getName());
-                        zos.putNextEntry(zEnt);
-                        byte[] data = Files.readAllBytes(obj.toPath());
-                        zos.write(data, 0, data.length);
-                        zos.closeEntry();
+
+                if (zipOBJ.exists()) {
+                    System.out.println("Results Obj zip ("+ zipOBJ.getName()+ ") already existed for " + simBaseDir 
+                            + ". Simulation skipped.");
+
+                } else {
+
+                    System.out.println("Generate results set for " + propFile.toFile().getParentFile().getAbsolutePath());
+
+                    if (sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER] != null) {
+                        sim.setSimCustomParameterStr(sim.getPropVal()[Simulation_MSM_Population.PROP_MSM_CUSTOM_PARAMETER].toString());
                     }
 
-                    zipOkay_OBJ = true;
-                } catch (IOException ex) {
-                    ex.printStackTrace(System.err);
-                }
+                    sim.generateOneResultSet();
+                    sim.decodeSnapCountFile();
 
-                if (!sim.getSimExtraFlags().contains(FLAG_NO_REMOVAL)) {
+                    Simulation_MSM_Population.decodeExportedPopulationFiles(new File(baseDir, singleSimFolder), null);
 
-                    File[] removeFile = simBaseDir.listFiles(new FileFilter() {
+                    // Zipping and clean up
+                    boolean zipOkay_DIR = false;
+                    boolean zipOkay_CSV = false;
+                    boolean zipOkay_OBJ = false;
+
+                    // Zipping all directory
+                    File[] exportDirs = simBaseDir.listFiles(new FileFilter() {
+                        @Override
+                        public boolean accept(File file) {
+                            return file.isDirectory();
+                        }
+                    });
+                    try {
+
+                        for (File dir : exportDirs) {
+                            util.FileZipper.zipFile(dir, new File(simBaseDir, dir.getName() + ".zip"));
+                        }
+
+                        zipOkay_DIR = true;
+                    } catch (IOException ex) {
+                        ex.printStackTrace(System.err);
+                    }
+
+                    // Zipping of CSV file
+                    File[] csvFile = simBaseDir.listFiles(new FileFilter() {
                         @Override
                         public boolean accept(File pathname) {
-                            return pathname.getName().endsWith("_pre");
+                            return pathname.getName().endsWith(".csv");
                         }
                     });
 
-                    for (File prefile : removeFile) {
-                        Files.delete(prefile.toPath());
-
-                    }
-
-                    if (zipOkay_CSV) {
+                    File zipCSV = new File(simBaseDir, "CSV_Files.zip");
+                    try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipCSV))) {
                         for (File csv : csvFile) {
-                            Files.delete(csv.toPath());
+                            ZipEntry zEnt = new ZipEntry(csv.getName());
+                            zos.putNextEntry(zEnt);
+                            byte[] data = Files.readAllBytes(csv.toPath());
+                            zos.write(data, 0, data.length);
+                            zos.closeEntry();
                         }
-                    }
-                    
-                    if (zipOkay_OBJ) {
-                        for (File obj : objFile) {
-                            Files.delete(obj.toPath());
-                        }
+
+                        zipOkay_CSV = true;
+                    } catch (IOException ex) {
+                        ex.printStackTrace(System.err);
                     }
 
-                    if (zipOkay_DIR) {
-                        for (File dir : exportDirs) {
-                            File[] allFiles = dir.listFiles();
-                            for (File f : allFiles) {
-                                Files.delete(f.toPath());
+                    // Zipping of CSV file
+                    File[] objFile = simBaseDir.listFiles(new FileFilter() {
+                        @Override
+                        public boolean accept(File pathname) {
+                            return pathname.getName().endsWith(".obj");
+                        }
+                    });
+
+                    try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipOBJ))) {
+                        for (File obj : objFile) {
+                            ZipEntry zEnt = new ZipEntry(obj.getName());
+                            zos.putNextEntry(zEnt);
+                            byte[] data = Files.readAllBytes(obj.toPath());
+                            zos.write(data, 0, data.length);
+                            zos.closeEntry();
+                        }
+
+                        zipOkay_OBJ = true;
+                    } catch (IOException ex) {
+                        ex.printStackTrace(System.err);
+                    }
+
+                    if (!sim.getSimExtraFlags().contains(FLAG_NO_REMOVAL)) {
+
+                        File[] removeFile = simBaseDir.listFiles(new FileFilter() {
+                            @Override
+                            public boolean accept(File pathname) {
+                                return pathname.getName().endsWith("_pre");
                             }
-                            Files.delete(dir.toPath());
-                        }                        
+                        });
+
+                        for (File prefile : removeFile) {
+                            Files.delete(prefile.toPath());
+
+                        }
+
+                        if (zipOkay_CSV) {
+                            for (File csv : csvFile) {
+                                Files.delete(csv.toPath());
+                            }
+                        }
+
+                        if (zipOkay_OBJ) {
+                            for (File obj : objFile) {
+                                Files.delete(obj.toPath());
+                            }
+                        }
+
+                        if (zipOkay_DIR) {
+                            for (File dir : exportDirs) {
+                                File[] allFiles = dir.listFiles();
+                                for (File f : allFiles) {
+                                    Files.delete(f.toPath());
+                                }
+                                Files.delete(dir.toPath());
+                            }
+                        }
+
                     }
 
                 }

@@ -1,14 +1,9 @@
 package test;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Properties;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import org.w3c.dom.Document;
@@ -145,14 +140,14 @@ public class Util_Population_Gen_Prop_Vaccine {
 
                         for (double dur : VACC_DURATION) {
                             vaccineSetting[VACCINE_DURATION_DEFAULT] = dur;
-                            vaccineSetting[VACCINE_END_TIME] = -(dur + 5 * 360); // Booster
+                            vaccineSetting[VACCINE_END_TIME] = -(dur + 2 * 360); // Booster
 
                             folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d_B%04d",
                                     (int) (coverage * 100),
                                     (int) (sus * 100),
                                     (int) (tran * 100),
                                     (int) dur,
-                                    (int) dur + 5 * 360);
+                                    (int) -vaccineSetting[VACCINE_END_TIME]);
 
                             File genPropFile = new File(FILE_TARGET_DIR, folderName);
                             genPropFile.mkdirs();
@@ -172,7 +167,7 @@ public class Util_Population_Gen_Prop_Vaccine {
                                         (int) (sus * 100),
                                         (int) (tran * 100),
                                         (int) dur,
-                                        (int) dur + 5 * 360);
+                                        (int) -vaccineSetting[VACCINE_END_TIME]);
 
                                 genPropFile = new File(FILE_TARGET_DIR, folderName);
                                 genPropFile.mkdirs();
@@ -196,7 +191,7 @@ public class Util_Population_Gen_Prop_Vaccine {
                                         (int) (sus * 100),
                                         (int) (tran * 100),
                                         (int) dur,
-                                        (int) dur + 5 * 360);
+                                        (int) -vaccineSetting[VACCINE_END_TIME]);
 
                                 genPropFile = new File(FILE_TARGET_DIR, folderName);
                                 genPropFile.mkdirs();
