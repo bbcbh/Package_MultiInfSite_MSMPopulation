@@ -28,7 +28,6 @@ import util.StaticMethods;
 import population.person.MultiSiteMultiStrainPersonInterface;
 import static infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT;
 import java.util.ArrayList;
-import sim.SinglePopRunnable;
 
 /**
  * @author Ben Hui
@@ -647,12 +646,11 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                             int pt = Arrays.binarySearch((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED], 2, 2 + numClass, classFloat);
 
                             if (pt <= 0) {
-                                pt = -(pt + 1);
+                                pt = ~pt;
                             }
 
                             if (pt < 2 + numClass) {
                                 int probPt = pt + numClass;
-
                                 srnTodayProb = ((float[]) getFields()[MSM_SCREENING_SETTING_TARGETED])[probPt];
                             } else {
                                 srnTodayProb = 0;
@@ -795,10 +793,10 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
                 // Test booster
                 int[] vTime = vaccine.getValidTime();
-                if (vTime[vTime.length-1] < 0) {
+                if (vTime[vTime.length - 1] < 0) {
                     HashMap<Integer, ArrayList<Integer>> booster
                             = (HashMap<Integer, ArrayList<Integer>>) getFields()[MSM_SITE_VACC_BOOSTER_SCHEDULE];
-                    int boosterTime = getGlobalTime() + -vTime[vTime.length-1];
+                    int boosterTime = getGlobalTime() + -vTime[vTime.length - 1];
 
                     ArrayList<Integer> ent = booster.get(boosterTime);
 

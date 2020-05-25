@@ -943,7 +943,7 @@ public class SinglePopRunnable implements Runnable {
                         if (allExtinct) {
                             showStrStatus("S" + getId() + ": extinction at " + t);
                             reportStepStatus(modelBurnIn + numSnaps * snapFreq);
-                            // Fill the remaining step count for early extinction
+                            // Fill the remaining step count for early extinction                            
                             while (s < numSnaps) {
                                 if (snapClassifiers[s] != null) {
                                     for (int c = 0; c < snapClassifiers[s].length; c++) {
@@ -968,6 +968,9 @@ public class SinglePopRunnable implements Runnable {
                                         }
                                     }
                                 }
+                                if (getPopulation() instanceof MSMPopulation && s < incidenceCounts.length) {
+                                    incidenceCounts[s] = ((MSMPopulation) getPopulation()).cumulativeIncidencesBySitesCount();
+                                }                                
                                 s++;
                             }
                             // Force export population
@@ -1144,7 +1147,7 @@ public class SinglePopRunnable implements Runnable {
 
                 reportStepStatus(t);
 
-                if (getPopulation() instanceof MSMPopulation) {
+                if (getPopulation() instanceof MSMPopulation && s < incidenceCounts.length) {
                     incidenceCounts[s] = ((MSMPopulation) getPopulation()).cumulativeIncidencesBySitesCount();
                 }
 
@@ -1259,6 +1262,8 @@ public class SinglePopRunnable implements Runnable {
 
                 errStr = new java.io.FileOutputStream(errFile, true);
                 errWri = new java.io.PrintWriter(errStr, true);
+                errWri.println(this.baseDir.toString() + ": ");
+
                 ex.printStackTrace(errWri);
                 errWri.close();
                 errStr.close();

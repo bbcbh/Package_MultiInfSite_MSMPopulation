@@ -70,10 +70,10 @@ public class Util_Population_Gen_Prop_Vaccine {
         13:OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_MEDIAN
         14:OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD
          */
-        double[] COVERAGE_RANGE = new double[]{0.25, 0.50, 0.75};
-        double[] SUSCEPTIBLE_EFFICACY = new double[]{0.25, 0.50, 0.75, 1};
-        double[] TRANMISSION_EFFICACY = new double[]{0.25, 0.50, 0.75, 1};
-        double[] VACC_DURATION = new double[]{2 * 360, 5 * 360, 10 * 360};
+        double[] COVERAGE_RANGE = new double[]{0.10};
+        double[] SUSCEPTIBLE_ADJ = new double[]{0, 0.25, 0.50, 0.75};
+        double[] TRANMISSION_ADJ = new double[]{0, 0.25, 0.50, 0.75, 1};
+        double[] VACC_DURATION = new double[]{2 * 360, 5 * 360};
 
         double[] vaccineSettingBase = new double[15];
         Arrays.fill(vaccineSettingBase, -1);
@@ -125,12 +125,12 @@ public class Util_Population_Gen_Prop_Vaccine {
         for (double coverage : COVERAGE_RANGE) {
             vaccineSetting = Arrays.copyOf(vaccineSettingBase, vaccineSettingBase.length);
             vaccineSetting[VACC_COVERAGE_SETTING] = -coverage;
-            for (double sus : SUSCEPTIBLE_EFFICACY) {
+            for (double sus : SUSCEPTIBLE_ADJ) {
                 vaccineSetting[SUSCEPTIBLE_EFFICACY_G] = sus;
                 vaccineSetting[SUSCEPTIBLE_EFFICACY_A] = sus;
                 vaccineSetting[SUSCEPTIBLE_EFFICACY_R] = sus;
 
-                for (double tran : TRANMISSION_EFFICACY) {
+                for (double tran : TRANMISSION_ADJ) {
 
                     vaccineSetting[TRANMISSION_EFFICACY_G] = tran;
                     vaccineSetting[TRANMISSION_EFFICACY_A] = tran;
@@ -157,7 +157,7 @@ public class Util_Population_Gen_Prop_Vaccine {
                             PropValUtils.replacePropEntryByDOM(xml_src, genPropFile,
                                     new Element[]{src_vaccine}, null);
 
-                            if (tran == 1 && dur == 5 * 360 && coverage == 0.50) {
+                            if (tran == 1 && dur == 5 * 360 && coverage == 0.10) {
                                 double[] vaccineSettingR = Arrays.copyOf(vaccineSetting, vaccineSetting.length);
                                 vaccineSettingR[SUSCEPTIBLE_EFFICACY_R] = 0;
                                 vaccineSettingR[TRANMISSION_EFFICACY_R] = 0;
@@ -178,7 +178,7 @@ public class Util_Population_Gen_Prop_Vaccine {
                                         new Element[]{src_vaccine}, null);
 
                             }
-                            if (tran == 1 && dur == 5 * 360 && coverage == 0.50) {
+                            if (tran == 1 && dur == 5 * 360 && coverage == 0.10) {
 
                                 double[] vaccineSettingSym = Arrays.copyOf(vaccineSetting, vaccineSetting.length);
                                 vaccineSettingSym[REMOVE_SYM_RATE_DEFAULT] = 1;
