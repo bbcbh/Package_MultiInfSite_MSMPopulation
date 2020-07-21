@@ -77,7 +77,7 @@ public class Simulation_MSM_Population_BatchRun {
             }
         }
 
-        System.out.println(String.format("# folder matched  = %d", folderNames.length));
+        System.out.println(String.format("# of folders matched  = %d", folderNames.length));
 
         for (String singleSimFolder : folderNames) {
             sim = new Simulation_MSM_Population();
@@ -134,10 +134,24 @@ public class Simulation_MSM_Population_BatchRun {
 
             } else {
                 File simBaseDir = new File(baseDir, singleSimFolder);
+                if (extraFlag.length() > 0 
+                        && extraFlag.contains(Simulation_MSM_Population.FLAG_CLEAR_PREVIOUS_RESULTS)) {
+                    File[] delFile = simBaseDir.listFiles(new FileFilter() {
+                        @Override
+                        public boolean accept(File pathname) {
+                            return !pathname.getName().endsWith(".prop");
+
+                        }
+                    });
+                    for (File f : delFile) {
+                        f.delete();
+                    }
+                }
+
                 File zipOBJ = new File(simBaseDir, "OBJ_Files.zip");
 
                 if (zipOBJ.exists()) {
-                    System.out.println("Results Obj zip ("+ zipOBJ.getName()+ ") already existed for " + simBaseDir 
+                    System.out.println("Results Obj zip (" + zipOBJ.getName() + ") already existed for " + simBaseDir
                             + ". Simulation skipped.");
 
                 } else {

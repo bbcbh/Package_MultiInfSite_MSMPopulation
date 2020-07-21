@@ -149,7 +149,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
     public static final int MSM_SITE_VACC_BOOSTER_SCHEDULE = MSM_SITE_CURRENTLY_VACCINATED + 1;
     public static final int LENGTH_FIELDS_MSM_POP = MSM_SITE_VACC_BOOSTER_SCHEDULE + 1;
 
-    public static final Object[] DEFAULT_MSM_FIELDS = {
+    public final Object[] DEFAULT_MSM_FIELDS = {
         // Min/max for anal and oral sex for reg (per day) and causal relationship (per partnership), from 
         // Crawford et al. Number of risk acts by relationship status
         //  and partner serostatus: Findings from the HIM cohort of homosexually active men in Sydney,
@@ -783,7 +783,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
     protected void vaccinatePerson(AbstractVaccination vaccine, AbstractIndividualInterface person) {
         if (vaccine != null && person != null) {
-            if (vaccine.vaccinationApplicableAt(getGlobalTime())) {
+            if (vaccine.vaccinationApplicableAt(getGlobalTime())) {                                              
                 if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] == null) {
                     HashMap<Integer, int[]> currentVaccinated = new HashMap<>();
                     getFields()[MSM_SITE_CURRENTLY_VACCINATED] = currentVaccinated;
@@ -832,7 +832,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
                         }
                     }
 
-                }
+                }                
                 ((HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED]).put(person.getId(), vacSetting);
             }
         }
