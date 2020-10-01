@@ -74,7 +74,7 @@ public class Util_Population_Gen_Prop_Vaccine {
         double[] COVERAGE_RANGE = new double[]{ 0.30};
         double[] SUSCEPTIBLE_ADJ = new double[]{0, 0.25, 0.50, 0.75, 1};
         double[] TRANMISSION_ADJ = new double[]{0, 0.25, 0.50, 0.75, 1};
-        double[] VACC_DURATION = new double[]{2 * 360};
+        double[] VACC_DURATION = new double[]{1 * 360};
 
         double[] vaccineSettingBase = new double[16];
         Arrays.fill(vaccineSettingBase, -1);
@@ -101,13 +101,13 @@ public class Util_Population_Gen_Prop_Vaccine {
                 = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_VACCINE_DURATION_DEFAULT + offset;
 
         int REMOVE_SYM_RATE_DEFAULT
-                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_RATE_DEFAULT;
+                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_RATE_DEFAULT + offset;
         int REMOVE_SYM_STATE_DEFAULT
-                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT;
+                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT + offset;
         int REMOVE_SYM_INF_DUR_DEFAULT_MEDIAN
-                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_MEDIAN;
+                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_MEDIAN + offset;
         int REMOVE_SYM_INF_DUR_DEFAULT_SD
-                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD;
+                = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD + offset;
 
         vaccineSettingBase[VACC_COVERAGE_SETTING] = -0.25;
         vaccineSettingBase[TRANMISSION_EFFICACY_G] = 1;
@@ -145,8 +145,15 @@ public class Util_Population_Gen_Prop_Vaccine {
                             vaccineSetting[VACCINE_END_TIME] = vaccineSetting[VACCINE_START_TIME];
 
                             // With Booster                            
-                            vaccineSetting[VACCINE_END_TIME] = -(dur + 360); // Booster
-                             
+                            //vaccineSetting[VACCINE_END_TIME] = -(dur + 360); // Booster
+                            
+                            boolean st_map = true;
+                            boolean extra_r_eff = false && (tran == 0.50 && sus == 0.50);
+                            boolean extra_sym_r = false && !((tran == 0.50 && sus == 0.50) || (tran == 1 && sus == 1));
+                            File genPropFile;
+                            
+                            if(st_map){
+                            
                             if (vaccineSettingBase[VACCINE_START_TIME] == vaccineSetting[VACCINE_END_TIME]) {
                                 folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d",
                                         (int) (coverage * 100),
@@ -161,27 +168,28 @@ public class Util_Population_Gen_Prop_Vaccine {
                                         (int) dur,
                                         (int) -vaccineSetting[VACCINE_END_TIME]);
                             }
-                            File genPropFile = new File(FILE_TARGET_DIR, folderName);
+                            genPropFile = new File(FILE_TARGET_DIR, folderName);
                             genPropFile.mkdirs();
                             genPropFile = new File(genPropFile, PROP_FILE_NAME);
 
                             src_vaccine.setTextContent(Arrays.deepToString(new double[][]{vaccineSetting}));
                             PropValUtils.replacePropEntryByDOM(xml_src, genPropFile,
                                     new Element[]{src_vaccine}, null);
+                            
+                            }
 
-                            /*
+                            
 
-                            if (tran == 1 && dur == VACC_DURATION[0] && coverage == COVERAGE_RANGE[0]) {
+                            if (extra_r_eff) {
                                 double[] vaccineSettingR = Arrays.copyOf(vaccineSetting, vaccineSetting.length);
-                                vaccineSettingR[SUSCEPTIBLE_EFFICACY_R] = 0;
-                                vaccineSettingR[TRANMISSION_EFFICACY_R] = 0;
+                                vaccineSettingR[SUSCEPTIBLE_EFFICACY_R] = 1.0;
+                                vaccineSettingR[TRANMISSION_EFFICACY_R] = 1.0;
 
-                                folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d_B%04d_R100",
+                                folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d_R100",
                                         (int) (coverage * 100),
                                         (int) (sus * 100),
                                         (int) (tran * 100),
-                                        (int) dur,
-                                        (int) -vaccineSetting[VACCINE_END_TIME]);
+                                        (int) dur);
 
                                 genPropFile = new File(FILE_TARGET_DIR, folderName);
                                 genPropFile.mkdirs();
@@ -192,7 +200,7 @@ public class Util_Population_Gen_Prop_Vaccine {
                                         new Element[]{src_vaccine}, null);
 
                             }
-                            if (tran == 1 && dur == VACC_DURATION[0] && coverage == COVERAGE_RANGE[0]) {
+                            if (extra_sym_r) {
 
                                 double[] vaccineSettingSym = Arrays.copyOf(vaccineSetting, vaccineSetting.length);
                                 vaccineSettingSym[REMOVE_SYM_RATE_DEFAULT] = 1;
@@ -200,12 +208,11 @@ public class Util_Population_Gen_Prop_Vaccine {
                                 vaccineSettingSym[REMOVE_SYM_INF_DUR_DEFAULT_MEDIAN] = 185;
                                 vaccineSettingSym[REMOVE_SYM_INF_DUR_DEFAULT_SD] = 35;
 
-                                folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d_B%04d_SYMR100",
+                                folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d_SYMR100",
                                         (int) (coverage * 100),
                                         (int) (sus * 100),
                                         (int) (tran * 100),
-                                        (int) dur,
-                                        (int) -vaccineSetting[VACCINE_END_TIME]);
+                                        (int) dur);
 
                                 genPropFile = new File(FILE_TARGET_DIR, folderName);
                                 genPropFile.mkdirs();
@@ -217,7 +224,6 @@ public class Util_Population_Gen_Prop_Vaccine {
 
                             }
                             
-                             */
                         }
                     }
 

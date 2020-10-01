@@ -1457,7 +1457,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         pri_inf_stat.println();
                         pri_inf_stat.flush();
 
-                        for (int c = 1; c < map_NumberCasual6Months.length; c++) {
+                        for (int c = 0; c < map_NumberCasual6Months.length; c++) {
                             pri_numPartnerLast6Months.print(i);
                             pri_numPartnerLast6Months.print(',');
                             pri_numPartnerLast6Months.print(c);
