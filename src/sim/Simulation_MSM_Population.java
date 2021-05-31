@@ -153,7 +153,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     public final static String FLAG_NO_REMOVAL = "-noFileRemoval";
     public final static String FLAG_CLEAR_PREVIOUS_RESULTS = "-clearPrevResult";
-    
+
     public String getSimExtraFlags() {
         return simExtraFlags;
     }
@@ -249,21 +249,20 @@ public class Simulation_MSM_Population implements SimulationInterface {
     }
 
     @Override
-    public void generateOneResultSet() throws IOException, InterruptedException {        
-        if(getSimExtraFlags().contains(FLAG_CLEAR_PREVIOUS_RESULTS)){
-           File[] delFile = baseDir.listFiles(new FileFilter() {
-               @Override
-               public boolean accept(File pathname) {
-                   return !pathname.getName().endsWith(".prop");
-                   
-               }
-           });
-           for(File f : delFile){
-               f.delete();
-           }                        
+    public void generateOneResultSet() throws IOException, InterruptedException {
+        if (getSimExtraFlags().contains(FLAG_CLEAR_PREVIOUS_RESULTS)) {
+            File[] delFile = baseDir.listFiles(new FileFilter() {
+                @Override
+                public boolean accept(File pathname) {
+                    return !pathname.getName().endsWith(".prop");
+
+                }
+            });
+            for (File f : delFile) {
+                f.delete();
+            }
         }
-        
-        
+
         int simSoFar = 0;
 
         int numProcess = maxThreads;
@@ -681,7 +680,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
     protected void finalise(int simSoFar) throws IOException {
         try {
             StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_END_NUM_INF]), simSoFar);
-            StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EXTINCT_AT]), simSoFar);            
+            StaticMethods.decodeResultObjFile(new File(baseDir, FILE_NAMES_OBJ[FILE_EXTINCT_AT]), simSoFar);
 
         } catch (ClassNotFoundException ex) {
             System.err.println(getClass().getName() + ".generateOneResultSet: Error - corrupted data file");
@@ -984,7 +983,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
             // 2 = map_NumberCasual6MonthInfected, 
             // 3 = map_NumberCasual6MonthInfectedNewStrain
             // 4 = newStrainHasRegPartner
-            // 5 = Vaccinate stat = new int[] {num_unvaccinated, num_vaccinated_active, num_vaccinated_expired}
+            // 5 = Vaccinate stat = new int[] {num_unvaccinated, num_vaccinated_active, num_vaccinated_expired , ...
+            //     num_unvaccinated_10CasualPlus, num_vaccinated_active_10CasualPlus, num_vaccinated_expired_10CasualPlus}
 
             Matcher m = p.matcher(popFile.getName());
             m.find();
@@ -994,7 +994,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
             int[] map_NumberCasual6MonthInfected = new int[20];
             int[] map_NumberCasual6MonthInfectedNewStrain = new int[20];
             int[] inf_stat_count = new int[inf_stat_header.split(",").length];
-            int[] vaccinate_stat = new int[3];
+            int[] vaccinate_stat = new int[6];
 
             ArrayList<Integer> newStrainHasReg = new ArrayList<>();
 
@@ -1070,7 +1070,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         updateExportedPopCount(inf_stat_count, infStat, strainStat, numReg, numCasual6Months,
                                 map_NumberCasual6Months, map_NumberCasual6MonthInfected, map_NumberCasual6MonthInfectedNewStrain, newStrainHasReg);
 
-                        int vaccinated_index = 0; // 0 = unvaccinated, 1 = active, 2 = expired 
+                        int vaccinated_index = 0; // 0 = unvaccinated, 1 = active, 2 = expired                                                   
                         if (index_vac_until >= 0) {
                             int age_current = Integer.parseInt(ent[index_age]);
                             int vacc_until = Integer.parseInt(ent[index_vac_until]);
@@ -1080,6 +1080,12 @@ public class Simulation_MSM_Population implements SimulationInterface {
                             }
                         }
                         vaccinate_stat[vaccinated_index]++;
+
+                        // For 10 casual partner plus
+                        // 3 = unvaccinated, 4 = active, 5 = expired    
+                        if (numCasual6Months >= 10) {
+                            vaccinate_stat[3 + vaccinated_index]++;
+                        }
 
                     }
 
@@ -1140,6 +1146,13 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         }
 
                         vaccinate_stat[vaccinated_index]++;
+
+                        // For 10 casual partner plus
+                        // 3 = unvaccinated, 4 = active, 5 = expired    
+                        if (numCasual >= 10) {
+                            vaccinate_stat[3 + vaccinated_index]++;
+                        }
+
                     }
 
                 }
@@ -1335,7 +1348,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                 PrintWriter pri_vaccine_stat = new PrintWriter(new FileWriter(new File(exportDir, FILE_NAMES_CSV[FILE_VACCINATE_STAT]), APPEND_PRI));
 
                 if (!prePrintExist[FILE_VACCINATE_STAT] || !APPEND_PRI) {
-                    pri_vaccine_stat.println("Sim, Unvaccinated, Vaccinated - active, Vaccinated - expired");
+                    pri_vaccine_stat.println("Sim, Unvaccinated, Vaccinated - active, Vaccinated - expired, "
+                            + "Unvaccinated (10+ Casual), Vaccinated - active (10+ Casual), Vaccinated - expired (10+ Casual)");
                 }
 
                 PrintWriter[] writers = new PrintWriter[]{pri_inf_stat, pri_numPartnerLast6Months, pri_newStrainHasRegPartner, pri_vaccine_stat};
