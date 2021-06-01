@@ -71,10 +71,10 @@ public class Util_Population_Gen_Prop_Vaccine {
         14:OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_MEDIAN
         15:OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD
          */
-        double[] COVERAGE_RANGE = new double[]{ 0.30};
+        double[] COVERAGE_RANGE = new double[]{0.30};
         double[] SUSCEPTIBLE_ADJ = new double[]{0, 0.25, 0.50, 0.75, 1};
         double[] TRANMISSION_ADJ = new double[]{0, 0.25, 0.50, 0.75, 1};
-        double[] VACC_DURATION = new double[]{1 * 360};
+        double[] VACC_DURATION = new double[]{2 * 360};
 
         double[] vaccineSettingBase = new double[16];
         Arrays.fill(vaccineSettingBase, -1);
@@ -109,14 +109,14 @@ public class Util_Population_Gen_Prop_Vaccine {
         int REMOVE_SYM_INF_DUR_DEFAULT_SD
                 = infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_INF_DUR_DEFAULT_SD + offset;
 
-        vaccineSettingBase[VACC_COVERAGE_SETTING] = -0.25;
+        vaccineSettingBase[VACC_COVERAGE_SETTING] = -0.3;
         vaccineSettingBase[TRANMISSION_EFFICACY_G] = 1;
         vaccineSettingBase[TRANMISSION_EFFICACY_A] = 1;
         vaccineSettingBase[TRANMISSION_EFFICACY_R] = 1;
         vaccineSettingBase[SUSCEPTIBLE_EFFICACY_G] = 1;
         vaccineSettingBase[SUSCEPTIBLE_EFFICACY_A] = 1;
         vaccineSettingBase[SUSCEPTIBLE_EFFICACY_R] = 1;
-        vaccineSettingBase[VACCINE_DURATION_DEFAULT] = 10 * 360;
+        vaccineSettingBase[VACCINE_DURATION_DEFAULT] = 2 * 360;
 
         // Generate prop
         double[] vaccineSetting;
@@ -147,8 +147,11 @@ public class Util_Population_Gen_Prop_Vaccine {
                             // With Booster                            
                             //vaccineSetting[VACCINE_END_TIME] = -(dur + 360); // Booster
                             
-                            boolean st_map = true;
-                            boolean extra_r_eff = false && (tran == 0.50 && sus == 0.50);
+                            boolean st_map = !true;
+                            
+                            double R_EFF = 0.5;                            
+                            boolean extra_r_eff = R_EFF != 0;
+                            
                             boolean extra_sym_r = false && !((tran == 0.50 && sus == 0.50) || (tran == 1 && sus == 1));
                             File genPropFile;
                             
@@ -182,14 +185,19 @@ public class Util_Population_Gen_Prop_Vaccine {
 
                             if (extra_r_eff) {
                                 double[] vaccineSettingR = Arrays.copyOf(vaccineSetting, vaccineSetting.length);
-                                vaccineSettingR[SUSCEPTIBLE_EFFICACY_R] = 1.0;
-                                vaccineSettingR[TRANMISSION_EFFICACY_R] = 1.0;
+                          
+                                // divide as it is stored as tranmission adjustment
+                                vaccineSettingR[SUSCEPTIBLE_EFFICACY_R] = Math.min(1, vaccineSettingR[SUSCEPTIBLE_EFFICACY_R]/R_EFF); 
+                                vaccineSettingR[TRANMISSION_EFFICACY_R] = Math.min(1, vaccineSettingR[TRANMISSION_EFFICACY_R]/R_EFF);
+                                
+                            
 
-                                folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d_R100",
+                                folderName = String.format("Vacc_C%03d_S%03d_T%03d_D%04d_R%03d",
                                         (int) (coverage * 100),
                                         (int) (sus * 100),
                                         (int) (tran * 100),
-                                        (int) dur);
+                                        (int) dur,
+                                        (int) (R_EFF*100));
 
                                 genPropFile = new File(FILE_TARGET_DIR, folderName);
                                 genPropFile.mkdirs();
