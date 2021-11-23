@@ -10,7 +10,11 @@ import random.RandomGenerator;
  */
 public class MSMAvailablity extends AbstractAvailability {
     
-    protected AbstractIndividualInterface[][] available;    
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 475269122305141031L;
+	protected AbstractIndividualInterface[][] available;    
     protected AbstractIndividualInterface[][] pairing = null;             
     
     public MSMAvailablity(RandomGenerator RNG) {

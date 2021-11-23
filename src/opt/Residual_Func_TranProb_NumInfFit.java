@@ -186,7 +186,12 @@ public class Residual_Func_TranProb_NumInfFit extends AbstractResidualFunc {
             } else {
                 runnable[r].setProgressSupport(
                         new PropertyChangeSupport(runnable[r]) {
-                    @Override
+                    /**
+							 * 
+							 */
+							private static final long serialVersionUID = -4223092433841827415L;
+
+					@Override
                     public void firePropertyChange(String string, Object o, Object o2) {
                         // Dummy - do nothing
                     }

@@ -84,7 +84,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
         "PROP_MSM_SIM_TYPE", "PROP_MSM_CUSTOM_PARAMETER",
         "PROP_MSM_SKIP_THREAD_RANGE", "PROP_MSM_VACCINE_SETTING", "PROP_MSM_INIT_POP_SIZE"};
 
-    public static final Class[] PROP_CLASS_MSM_MIS = {
+    @SuppressWarnings("rawtypes")
+	public static final Class[] PROP_CLASS_MSM_MIS = {
         float[][].class, // float[]{globaltime, strainNum, site, number of infection to introduce, frequency (optional), candidate behavior }
         float[][].class, // float[exist_strain][new_strain]{likelihood to coexist}
         Integer.class, // 0 (default) = simulation, 1 = optimisation
@@ -248,7 +249,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
         this.snapshotCountAccum = snapshotCountAccum;
     }
 
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     public void generateOneResultSet() throws IOException, InterruptedException {
         if (getSimExtraFlags().contains(FLAG_CLEAR_PREVIOUS_RESULTS)) {
             File[] delFile = baseDir.listFiles(new FileFilter() {
@@ -478,7 +480,12 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     final PrintWriter pri_Output = priWri[r];
                     runnable[r].setProgressSupport(new PropertyChangeSupport(runnable) {
 
-                        @Override
+                        /**
+						 * 
+						 */
+						private static final long serialVersionUID = -4421160519625593382L;
+
+						@Override
                         public void firePropertyChange(String key, Object notUsed, Object str) {
                             if (SimulationInterface.PROGRESS_MSG.equals(key)) {
                                 pri_Output.println(str);
@@ -988,7 +995,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
             Matcher m = p.matcher(popFile.getName());
             m.find();
-            int popId = new Integer(m.group(1));
+            int popId = Integer.parseInt(m.group(1)); // new Integer(m.group(1));
 
             int[] map_NumberCasual6Months = new int[20];
             int[] map_NumberCasual6MonthInfected = new int[20];
@@ -1137,7 +1144,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                                 newStrainHasReg);
 
                         int vaccinated_index = 0; // 0 = unvaccinated, 1 = active, 2 = expired 
-                        HashMap<Integer, int[]> currentVacc = (HashMap<Integer, int[]>) pop.getValue("", MSMPopulation.MSM_SITE_CURRENTLY_VACCINATED);
+                        @SuppressWarnings("unchecked")
+						HashMap<Integer, int[]> currentVacc = (HashMap<Integer, int[]>) pop.getValue("", MSMPopulation.MSM_SITE_CURRENTLY_VACCINATED);
                         if (currentVacc != null) {
                             int[] vacEnt = currentVacc.get(p.getId());
                             if (vacEnt != null) {
@@ -1281,8 +1289,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                         Matcher m2 = PATTERN_POP_STAT.matcher(f2.getName());
                         m1.find();
                         m2.find();
-                        Integer n1 = new Integer(m1.group(1));
-                        Integer n2 = new Integer(m2.group(1));
+                        Integer n1 = Integer.parseInt(m1.group(1)); //new Integer(m1.group(1));
+                        Integer n2 = Integer.parseInt(m2.group(1)); //new Integer(m2.group(1));
                         return n1.compareTo(n2);
                     }
                 });
@@ -1306,8 +1314,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
                             Matcher m2 = PATTERN_IMPORT_FILE.matcher(f2.getName());
                             m1.find();
                             m2.find();
-                            Integer n1 = new Integer(m1.group(1));
-                            Integer n2 = new Integer(m2.group(1));
+                            Integer n1 = Integer.parseInt(m1.group(1)); //new Integer(m1.group(1));
+                            Integer n2 = Integer.parseInt(m2.group(1)); //new Integer(m2.group(1));
                             return n1.compareTo(n2);
                         }
                     });
@@ -1356,7 +1364,8 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
                 ExecutorService threadpool = null;
                 int inThreadPool = 0;
-                java.util.concurrent.Future<int[][]>[] result_Map = new java.util.concurrent.Future[popFiles.length];
+                @SuppressWarnings("unchecked")
+				java.util.concurrent.Future<int[][]>[] result_Map = new java.util.concurrent.Future[popFiles.length];
 
                 boolean[] exportedSoFar = new boolean[popFiles.length];
 
@@ -1371,7 +1380,7 @@ public class Simulation_MSM_Population implements SimulationInterface {
                     }
                     Matcher m = p.matcher(popFile.getName());
                     m.find();
-                    int popId = new Integer(m.group(1));
+                    int popId = Integer.parseInt(m.group(1)); //new Integer(m.group(1));
 
                     if (!prePrintExist[FILE_INFECTION_STAT_CSV]
                             || popId >= popId_range[0] && popId < popId_range[1]) {
@@ -1572,7 +1581,11 @@ public class Simulation_MSM_Population implements SimulationInterface {
 
     private final class CLASSIFIER_PREVAL implements PersonClassifier {
 
-        int siteId;
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = 273022131860511949L;
+		int siteId;
 
         public CLASSIFIER_PREVAL(int siteId) {
             this.siteId = siteId;

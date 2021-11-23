@@ -139,6 +139,7 @@ public abstract class Abstract_Optimisation_MSM {
                  */
                 lnNum++;
             }
+            constraintReader2.close();
         }
         //</editor-fold>
         return constraints;

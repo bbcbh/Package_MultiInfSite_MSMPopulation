@@ -85,8 +85,8 @@ public class SinglePopRunnable implements Runnable {
 
     private String infectioHistoryPrefix = null;  // If not null, then export infection history
 
-    private final HashMap<Integer, float[]> infectionIntroMap = new HashMap();  // Global time, prevalence
-    private final HashMap<Integer, Integer> infectionPreExposeMap = new HashMap(); // infection_id, days
+    private final HashMap<Integer, float[]> infectionIntroMap = new HashMap<>();  // Global time, prevalence
+    private final HashMap<Integer, Integer> infectionPreExposeMap = new HashMap<>(); // infection_id, days
 
     public static final String EXPORT_PREFIX = "export_";
     public static final String EXPORT_FORCED_PREFIX = "forced_";
@@ -121,7 +121,7 @@ public class SinglePopRunnable implements Runnable {
     public static final int PATIENT_ZERO_PARNTER_REC_BEHAVIOR = PATIENT_ZERO_PARNTER_REC_TYPE + 1;
     public static final int LENGTH_PATIENT_ZERO_PARNTER_REC = PATIENT_ZERO_PARNTER_REC_BEHAVIOR + 1;
 
-    ArrayList<int[]> patient_zero_newStrainSpreadSummary = new ArrayList();
+    ArrayList<int[]> patient_zero_newStrainSpreadSummary = new ArrayList<>();
 
     // Vaccination
     double[][] vaccineSettingAll;
@@ -335,7 +335,8 @@ public class SinglePopRunnable implements Runnable {
         exportPopAt(false);
     }
 
-    public void exportPopAt(boolean forced) {
+    @SuppressWarnings("unchecked")
+	public void exportPopAt(boolean forced) {
 
         if (baseDir != null) {
 
@@ -555,7 +556,7 @@ public class SinglePopRunnable implements Runnable {
         if (infectionEvents[snapNum] == null) {
             infectionEvents[snapNum] = new StrainIntroEvent(getPopulation().getInfList().length);
         }
-        infectionEvents[snapNum].setEvent(infId, infClassifer, preval, new Object[]{new Integer(strainNum)});
+        infectionEvents[snapNum].setEvent(infId, infClassifer, preval, new Object[]{strainNum /*new Integer(strainNum)*/ });
     }
 
     private void showStrStatus(String str) {
@@ -644,7 +645,7 @@ public class SinglePopRunnable implements Runnable {
             t = modelBurnIn;
             showStrStatus("S" + getId() + ": Simulation in progress");
 
-            HashMap<String, int[]> currentInfectedAt = new HashMap();
+            HashMap<String, int[]> currentInfectedAt = new HashMap<>();
             // Str[person id, site Id], [infection status, startTime]                      
 
             runSim:
@@ -920,7 +921,7 @@ public class SinglePopRunnable implements Runnable {
                                             ex.printStackTrace();
                                         }
 
-                                        currentInfectedAt.remove(currentInfectedAtKey);
+                                        currentInfectedAt.remove(keyStr);
                                     }
                                 }
 
@@ -1089,7 +1090,8 @@ public class SinglePopRunnable implements Runnable {
 
                                         if (newInfectFromPatientZero) {
 
-                                            int[] newEnt = newEnt = new int[1 // time
+                                            int[] newEnt;
+											newEnt = new int[1 // time
                                                     + 1 // relationship type
                                                     + 2 // patient_zero_id, patient_zero_age
                                                     + patient_zero.getCurrentStrainsAtSite().length

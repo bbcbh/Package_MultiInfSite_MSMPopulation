@@ -152,7 +152,7 @@ public class Util_Population_Gen_Prop_Vaccine {
                             double R_EFF = 0.5;                            
                             boolean extra_r_eff = R_EFF != 0;
                             
-                            boolean extra_sym_r = false && !((tran == 0.50 && sus == 0.50) || (tran == 1 && sus == 1));
+                            boolean extra_sym_r = false;
                             File genPropFile;
                             
                             if(st_map){

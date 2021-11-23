@@ -11,7 +11,11 @@ import person.AbstractIndividualInterface;
  */
 public class RelationshipPerson_MSM extends RelationshipPerson {
 
-    public static final int BEHAV_REG_ONLY = 0;
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 3606660625193387151L;
+	public static final int BEHAV_REG_ONLY = 0;
     public static final int BEHAV_CAS_ONLY = 1;
     public static final int BEHAV_BOTH = 2;
     public static final int SITE_G = 0;
@@ -74,7 +78,8 @@ public class RelationshipPerson_MSM extends RelationshipPerson {
         return res;
     }
 
-    @Override
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+	@Override
     public Comparable getParameter(String id) {
         for (int i = 0; i < PARA_NANE.length; i++) {
             if (PARA_NANE[i].equals(id)) {
@@ -84,12 +89,13 @@ public class RelationshipPerson_MSM extends RelationshipPerson {
         return super.getParameter(id);
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     @Override
     public Comparable setParameter(String id, Comparable val) {
-        Comparable ret;
+        //Comparable ret;
         for (int i = 0; i < PARA_NANE.length; i++) {
             if (PARA_NANE[i].equals(id)) {
-                ret = param[i];
+                //ret = param[i];
                 try {
                     param[i] = ((Number) val).intValue();
                 } catch (ClassCastException ex) {

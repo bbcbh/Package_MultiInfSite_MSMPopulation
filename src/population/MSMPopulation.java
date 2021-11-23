@@ -1,33 +1,32 @@
 package population;
 
+import static infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+
+import org.apache.commons.math3.distribution.AbstractRealDistribution;
+import org.apache.commons.math3.distribution.ExponentialDistribution;
+import org.apache.commons.math3.distribution.GammaDistribution;
+
 import availability.AbstractAvailability;
 import infection.AbstractInfection;
 import infection.GonorrhoeaSiteInfection;
 import infection.vaccination.AbstractVaccination;
 import infection.vaccination.SiteSpecificVaccination;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import org.apache.commons.math3.distribution.AbstractRealDistribution;
-import org.apache.commons.math3.distribution.ExponentialDistribution;
-import org.apache.commons.math3.distribution.GammaDistribution;
 import person.AbstractIndividualInterface;
-import static population.AbstractRegCasRelMapPopulation.*;
-
 import population.availability.MSMAvailablity;
-
+import population.person.MultiSiteMultiStrainPersonInterface;
 import population.person.RelationshipPerson_MSM;
 import population.relationshipMap.RegCasRelationship;
 import random.MersenneTwisterRandomGenerator;
 import relationship.RelationshipMap;
 import relationship.SingleRelationship;
 import util.PersonClassifier;
-
 import util.StaticMethods;
-import population.person.MultiSiteMultiStrainPersonInterface;
-import static infection.vaccination.SiteSpecificVaccination.OPTIONAL_EFFECT_REMOVE_SYM_STATE_DEFAULT;
-import java.util.ArrayList;
 
 /**
  * @author Ben Hui
@@ -103,7 +102,11 @@ import java.util.ArrayList;
  */
 public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
-    public int numInPop = 10000;
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = -4546602206264483380L;
+	public int numInPop = 10000;
 
     public void setInitNumInPop(int numInPop) {
 
@@ -252,7 +255,12 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
     // Screening (Targeted)
     private PersonClassifier targetedScreenClassifier = new PersonClassifier() {
-        @Override
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = -1766334374875280394L;
+
+		@Override
         public int classifyPerson(AbstractIndividualInterface p) {
             if (p instanceof RelationshipPerson_MSM) {
                 // From STIGMA guideline
@@ -449,7 +457,7 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
         }
 
-        getFields()[AbstractRegCasRelMapPopulation.FIELDS_NEXT_ID] = new Integer(getPop().length + 1);
+        getFields()[AbstractRegCasRelMapPopulation.FIELDS_NEXT_ID] = getPop().length + 1; // new Integer(getPop().length + 1);
         updatePairs();
 
     }
@@ -474,7 +482,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         }
     }
 
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     public void advanceTimeStep(int deltaT) {
 
         incrementTime(deltaT);
@@ -511,7 +520,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         RelationshipPerson_MSM[][] casualPart_candidateCollection = new RelationshipPerson_MSM[CASUAL_PARTNER_PROB.length][getPop().length];
         int[] casualPart_candidateCollectionPt = new int[CASUAL_PARTNER_PROB.length];
         int casualPart_Total = 0;
-        int regOnlyTotal = 0;
+        @SuppressWarnings("unused")
+		int regOnlyTotal = 0;
 
         AbstractVaccination vacc = ((AbstractVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION]);
 
@@ -781,7 +791,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
 
     }
 
-    protected void vaccinatePerson(AbstractVaccination vaccine, AbstractIndividualInterface person) {
+    @SuppressWarnings("unchecked")
+	protected void vaccinatePerson(AbstractVaccination vaccine, AbstractIndividualInterface person) {
         if (vaccine != null && person != null) {
             if (vaccine.vaccinationApplicableAt(getGlobalTime())) {                                              
                 if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] == null) {
@@ -876,7 +887,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         // Vaccination by screening
         if (getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
             AbstractVaccination vacc = ((AbstractVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION]);
-            HashMap<Integer, int[]> currentlyVaccinated = (HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED];
+            @SuppressWarnings("unchecked")
+			HashMap<Integer, int[]> currentlyVaccinated = (HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED];
 
             if (currentlyVaccinated == null || !currentlyVaccinated.containsKey(msm.getId())) {
                 if (vacc instanceof SiteSpecificVaccination) {
@@ -1055,7 +1067,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         // Effect of Vaccination
         if (getFields()[MSM_SITE_CURRENTLY_VACCINATED] != null
                 && getFields()[MSM_SITE_SPECIFIC_VACCINATION] != null) {
-            HashMap<Integer, int[]> currentVaccinated = (HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED];
+            @SuppressWarnings("unchecked")
+			HashMap<Integer, int[]> currentVaccinated = (HashMap<Integer, int[]>) getFields()[MSM_SITE_CURRENTLY_VACCINATED];
             SiteSpecificVaccination vaccine = (SiteSpecificVaccination) getFields()[MSM_SITE_SPECIFIC_VACCINATION];
             int[] vacRes = currentVaccinated.get(person.getId());
 
@@ -1112,7 +1125,8 @@ public class MSMPopulation extends AbstractRegCasRelMapPopulation {
         return removeSym;
     }
 
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     protected boolean[][] performAct(RegCasRelationship rel) {
 
         boolean[] hasActed = rel.hasActToday();

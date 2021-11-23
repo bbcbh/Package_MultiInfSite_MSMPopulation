@@ -12,7 +12,12 @@ import random.RandomGenerator;
  */
 public class MSMAvailbility_Bipartite extends MSMAvailablity {
 
-    public MSMAvailbility_Bipartite(RandomGenerator RNG) {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 3215241863364959117L;
+
+	public MSMAvailbility_Bipartite(RandomGenerator RNG) {
         super(RNG);
     }
 

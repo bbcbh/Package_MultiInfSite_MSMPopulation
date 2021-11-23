@@ -69,7 +69,7 @@ public class Test_SubAnalysis_STI_World_Congress_Abstract {
             }
 
             int[] patient_zero = null;
-            HashMap<Integer, int[]> regPartnerRec = new HashMap();
+            HashMap<Integer, int[]> regPartnerRec = new HashMap<>();
 
             File strainSpread = new File(newStrainDir, "newStrainSpread_" + sN + "_7919.csv");
 
@@ -91,6 +91,7 @@ public class Test_SubAnalysis_STI_World_Congress_Abstract {
                     partnerEntNext = line != null && line.startsWith("PATIENT_ZERO_PARNTER_ID");
 
                 }
+                r.close();
             }
 
             for (int[] popEnt : matrix_popSnap) {
@@ -198,7 +199,7 @@ public class Test_SubAnalysis_STI_World_Congress_Abstract {
         BufferedReader reader = new BufferedReader(new FileReader(csv));
         String line;
 
-        ArrayList<int[]> rows = new ArrayList();
+        ArrayList<int[]> rows = new ArrayList<>();
         // Skip
         for (int i = 0; i < skip; i++) {
             line = reader.readLine();
@@ -213,6 +214,7 @@ public class Test_SubAnalysis_STI_World_Congress_Abstract {
             }
             rows.add(rEntry);
         }
+        reader.close();
 
         int[][] res = new int[rows.size()][];
         int r = 0;
